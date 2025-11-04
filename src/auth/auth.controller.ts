@@ -292,14 +292,15 @@ async googleAuthRedirect(@Req() req: FastifyRequest, @Res() res: FastifyReply) {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const redirectUrl = `${frontendUrl}/auth/callback?token=${authResult.accessToken}&refresh=${authResult.refreshToken}`;
 
-    res.redirect(redirectUrl);
-    return res;  // ✅ This tells NestJS we've handled the response
+    // ✅ Fastify redirect signature: redirect(url, statusCode?)
+    res.redirect(redirectUrl, 302);
+    return res;
   } catch (error) {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const errorUrl = `${frontendUrl}/auth/login?error=oauth_failed`;
     
-    res.redirect(errorUrl);
-    return res;  // ✅ This tells NestJS we've handled the response
+    res.redirect(errorUrl, 302);
+    return res;
   }
 }
   
