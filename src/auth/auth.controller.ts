@@ -32,6 +32,7 @@ import { Public } from './guards/roles.guard';
 import { JwtAuthGuard } from './guards/jwt.auth.guard';
 import { User } from '../users/schemas/user.schema';
 import { GoogleOAuthGuard } from './guards/google-oauth.guard';
+import { ForgotPasswordDto, ResetPasswordDto, ValidateResetTokenDto } from './dto/password-reset.dto';
 
 // DTOs for API documentation
 class SendPhoneCodeRequestDto {
@@ -230,6 +231,38 @@ export class AuthController {
   ): Promise<AuthTokens> {
     return this.authService.refreshToken(refreshToken, req);
   }
+
+
+@Public()
+@Post('forgot-password')
+@HttpCode(HttpStatus.OK)
+@ApiOperation({ summary: 'Request password reset' })
+@ApiBody({ type: ForgotPasswordDto })
+@ApiResponse({ status: 200, description: 'Password reset email sent if account exists' })
+async forgotPassword(@Body() dto: ForgotPasswordDto) {
+  return this.authService.requestPasswordReset(dto.email);
+}
+
+@Public()
+@Post('validate-reset-token')
+@HttpCode(HttpStatus.OK)
+@ApiOperation({ summary: 'Validate password reset token' })
+@ApiBody({ type: ValidateResetTokenDto })
+@ApiResponse({ status: 200, description: 'Token validation result' })
+async validateResetToken(@Body() dto: ValidateResetTokenDto) {
+  return this.authService.validateResetToken(dto.token);
+}
+
+@Public()
+@Post('reset-password')
+@HttpCode(HttpStatus.OK)
+@ApiOperation({ summary: 'Reset password with token' })
+@ApiBody({ type: ResetPasswordDto })
+@ApiResponse({ status: 200, description: 'Password reset successfully' })
+@ApiResponse({ status: 401, description: 'Invalid or expired token' })
+async resetPassword(@Body() dto: ResetPasswordDto) {
+  return this.authService.resetPassword(dto.token, dto.newPassword);
+}
 
   // 🔥 FIX: Manually handle redirect for Fastify compatibility
  // Remove @Res() injection and let NestJS handle the response

@@ -818,6 +818,140 @@ export class AuthService {
     }
   }
 
+/**
+ * Request password reset - Send reset email
+ */
+async requestPasswordReset(email: string): Promise<{ message: string }> {
+  try {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Find user by email (case-insensitive)
+    const user = await this.userModel.findOne({
+      email: { $regex: `^${normalizedEmail}$`, $options: 'i' }
+    });
+
+    // Always return success message (don't reveal if email exists)
+    if (!user) {
+      this.logger.log(`Password reset requested for non-existent email: ${normalizedEmail}`);
+      return { message: 'If an account exists with this email, you will receive a password reset link shortly.' };
+    }
+
+    // Check if user has a password (not OAuth-only user)
+    if (!user.password) {
+      this.logger.log(`Password reset requested for OAuth-only user: ${normalizedEmail}`);
+      return { message: 'If an account exists with this email, you will receive a password reset link shortly.' };
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Save hashed token to database
+    user.resetPasswordToken = hashedToken;
+    user.resetPasswordExpires = expiresAt;
+    await user.save();
+
+    this.logger.log(`Password reset token generated for user: ${user._id}`);
+
+    // Send reset email
+    try {
+      await this.emailService.sendPasswordResetEmail(
+        user.email!,
+        user.name,
+        resetToken // Send unhashed token in email
+      );
+    } catch (error) {
+      this.logger.error('Failed to send password reset email:', error);
+      // Don't throw error to user - just log it
+    }
+
+    return { message: 'If an account exists with this email, you will receive a password reset link shortly.' };
+  } catch (error) {
+    this.logger.error('Password reset request failed:', error);
+    throw new BadRequestException('Failed to process password reset request');
+  }
+}
+
+/**
+ * Validate reset token
+ */
+async validateResetToken(token: string): Promise<{ valid: boolean; email?: string }> {
+  try {
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await this.userModel.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: new Date() }
+    });
+
+    if (!user) {
+      return { valid: false };
+    }
+
+    return { 
+      valid: true, 
+      email: user.email 
+    };
+  } catch (error) {
+    this.logger.error('Token validation failed:', error);
+    return { valid: false };
+  }
+}
+
+/**
+ * Reset password with token
+ */
+async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+  try {
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find user with valid reset token
+    const user = await this.userModel.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: new Date() }
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid or expired password reset token');
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    // Update password and clear reset token
+    user.password = hashedPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+
+    // Invalidate all existing sessions for security
+    user.sessions = [];
+
+    await user.save();
+
+    this.logger.log(`Password reset successfully for user: ${user._id}`);
+
+    // Send confirmation email
+    try {
+      await this.emailService.sendPasswordResetConfirmation(
+        user.email!,
+        user.name
+      );
+    } catch (error) {
+      this.logger.error('Failed to send password reset confirmation:', error);
+      // Don't throw error - password was already reset
+    }
+
+    return { message: 'Password has been reset successfully. You can now sign in with your new password.' };
+  } catch (error) {
+    if (error instanceof UnauthorizedException) {
+      throw error;
+    }
+    this.logger.error('Password reset failed:', error);
+    throw new BadRequestException('Failed to reset password');
+  }
+}
+
   /**
    * Generate JWT tokens and create session
    */

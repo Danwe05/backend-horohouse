@@ -30,13 +30,179 @@ export class EmailService {
     await this.safeSendMail({ to: recipientEmail, subject, html, text });
   }
 
+/**
+ * Send password reset email with reset link
+ */
+async sendPasswordResetEmail(
+  recipientEmail: string, 
+  recipientName: string, 
+  resetToken: string
+): Promise<void> {
+  const brandName = this.configService.get<string>('BRAND_NAME', 'HoroHouse');
+  const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
+
+  // Create reset URL pointing to frontend
+  const resetUrl = `${frontendUrl}/auth/reset-password?token=${resetToken}`;
+  
+  const displayName = recipientName?.trim() || 'there';
+  const subject = `Reset Your ${brandName} Password`;
+  const text = `Hi ${displayName},\n\nWe received a request to reset your password for your ${brandName} account.\n\nClick the link below to reset your password:\n\n${resetUrl}\n\nThis link will expire in 1 hour.\n\nIf you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.\n\nFor security reasons, this link can only be used once.\n\n— The ${brandName} Team`;
+  const html = this.buildPasswordResetTemplate({ 
+    brandName, 
+    recipientName: displayName, 
+    resetUrl,
+    frontendUrl 
+  });
+
+  await this.safeSendMail({ to: recipientEmail, subject, html, text });
+}
+
+/**
+ * Send password reset confirmation email
+ */
+async sendPasswordResetConfirmation(
+  recipientEmail: string, 
+  recipientName: string
+): Promise<void> {
+  const brandName = this.configService.get<string>('BRAND_NAME', 'HoroHouse');
+  const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
+
+  const displayName = recipientName?.trim() || 'there';
+  const subject = `Your ${brandName} Password Has Been Reset`;
+  const text = `Hi ${displayName},\n\nThis is a confirmation that your ${brandName} password has been successfully reset.\n\nIf you did not make this change, please contact our support team immediately.\n\nSign in to your account: ${frontendUrl}/auth/signin\n\n— The ${brandName} Team`;
+  const html = this.buildPasswordResetConfirmationTemplate({ 
+    brandName, 
+    recipientName: displayName, 
+    frontendUrl 
+  });
+
+  await this.safeSendMail({ to: recipientEmail, subject, html, text });
+}
+
+/**
+ * Password reset email template
+ */
+private buildPasswordResetTemplate(params: { 
+  brandName: string; 
+  recipientName: string; 
+  resetUrl: string; 
+  frontendUrl: string 
+}): string {
+  const { brandName, recipientName, resetUrl, frontendUrl } = params;
+  return `
+    <div style="font-family: Arial, Helvetica, sans-serif; background-color: #f6f9fc; padding: 24px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden;">
+        <tr>
+          <td style="padding: 24px; background: #0f172a; color: #ffffff;">
+            <h1 style="margin: 0; font-size: 20px;">${brandName}</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 24px; color: #0f172a;">
+            <h2 style="margin-top: 0;">Reset Your Password</h2>
+            <p style="line-height: 1.6; margin: 16px 0;">
+              Hi ${recipientName},
+            </p>
+            <p style="line-height: 1.6; margin: 16px 0;">
+              We received a request to reset your password for your ${brandName} account. Click the button below to create a new password.
+            </p>
+            <div style="margin-top: 24px;">
+              <a href="${resetUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600;">Reset Password</a>
+            </div>
+            <p style="line-height: 1.6; margin: 16px 0; font-size: 14px; color: #475569;">
+              This link will expire in <strong>1 hour</strong> for security reasons.
+            </p>
+            <p style="line-height: 1.6; margin: 16px 0; font-size: 14px; color: #475569;">
+              If the button doesn't work, copy and paste this link into your browser:
+            </p>
+            <p style="line-height: 1.6; margin: 8px 0; font-size: 14px; color: #2563eb; word-break: break-all;">
+              ${resetUrl}
+            </p>
+            <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
+              <p style="line-height: 1.6; margin: 0; font-size: 14px; color: #475569;">
+                <strong>Didn't request this?</strong>
+              </p>
+              <p style="line-height: 1.6; margin: 8px 0 0; font-size: 14px; color: #475569;">
+                If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.
+              </p>
+            </div>
+            <p style="line-height: 1.6; margin: 24px 0 0;">— The ${brandName} Team</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 16px 24px; background: #f8fafc; color: #64748b; font-size: 12px; text-align: center;">
+            <p style="margin: 0;">
+              For security, this link can only be used once and expires in 1 hour.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+}
+
+/**
+ * Password reset confirmation email template
+ */
+private buildPasswordResetConfirmationTemplate(params: { 
+  brandName: string; 
+  recipientName: string; 
+  frontendUrl: string 
+}): string {
+  const { brandName, recipientName, frontendUrl } = params;
+  const loginUrl = `${frontendUrl}/auth/signin`;
+  
+  return `
+    <div style="font-family: Arial, Helvetica, sans-serif; background-color: #f6f9fc; padding: 24px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden;">
+        <tr>
+          <td style="padding: 24px; background: #0f172a; color: #ffffff;">
+            <h1 style="margin: 0; font-size: 20px;">${brandName}</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 24px; color: #0f172a;">
+            <div style="text-align: center; margin-bottom: 24px;">
+              <div style="display: inline-block; background: #10b981; color: #ffffff; border-radius: 50%; width: 56px; height: 56px; line-height: 56px; font-size: 32px;">
+                ✓
+              </div>
+            </div>
+            <h2 style="margin-top: 0; text-align: center;">Password Successfully Reset</h2>
+            <p style="line-height: 1.6; margin: 16px 0;">
+              Hi ${recipientName},
+            </p>
+            <p style="line-height: 1.6; margin: 16px 0;">
+              This is a confirmation that your ${brandName} password has been successfully reset.
+            </p>
+            <p style="line-height: 1.6; margin: 16px 0;">
+              You can now sign in to your account using your new password.
+            </p>
+            <div style="margin-top: 24px; text-align: center;">
+              <a href="${loginUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600;">Sign In Now</a>
+            </div>
+            <div style="margin-top: 32px; padding: 16px; background: #fef2f2; border-left: 4px solid #ef4444; border-radius: 4px;">
+              <p style="line-height: 1.6; margin: 0; font-size: 14px; color: #991b1b;">
+                <strong>⚠️ Security Alert</strong>
+              </p>
+              <p style="line-height: 1.6; margin: 8px 0 0; font-size: 14px; color: #991b1b;">
+                If you did not make this change, please contact our support team immediately to secure your account.
+              </p>
+            </div>
+            <p style="line-height: 1.6; margin: 24px 0 0;">— The ${brandName} Team</p>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+}
+
   /**
    * Send email verification email
    */
   async sendEmailVerification(recipientEmail: string, recipientName: string, verificationToken: string): Promise<void> {
     const brandName = this.configService.get<string>('BRAND_NAME', 'HoroHouse');
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3001');
-    const apiUrl = this.configService.get<string>('API_URL', 'http://localhost:4000');
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'https://horohouse-beta.vercel.app');
+    const apiUrl = this.configService.get<string>('API_URL', 'https://backend-horohouse.onrender.com');
 
     const verificationUrl = `${apiUrl}/api/v1/auth/verify-email?token=${verificationToken}`;
     
