@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule'; // ✅ ADD THIS
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
 
@@ -11,10 +12,12 @@ import { UsersModule } from './users/users.module';
 import { PropertiesModule } from './properties/properties.module';
 import { HistoryModule } from './history/history.module';
 import { AnalyticsModule } from './analytics/analytics.module';
-import { CloudinaryModule } from './cloudinary/cloudinary.module';;
+import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { EmailModule } from './email/email.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { SavedSearchesModule } from './saved-searches/saved-searches.module';
+import { ReviewsModule } from './reviews/reviews.module';
 
 @Module({
   imports: [
@@ -31,8 +34,8 @@ import { NotificationsModule } from './notifications/notifications.module';
         uri: configService.get<string>('MONGODB_URI'),
       }),
       inject: [ConfigService],
-      
     }),
+    ScheduleModule.forRoot(),
 
     // Rate Limiting
     ThrottlerModule.forRootAsync({
@@ -56,6 +59,8 @@ import { NotificationsModule } from './notifications/notifications.module';
     EmailModule,
     OnboardingModule,
     NotificationsModule,
+    SavedSearchesModule,
+    ReviewsModule
   ],
   providers: [
     {

@@ -93,6 +93,15 @@ export class User {
   @Prop({ default: true })
   isActive: boolean;
 
+  @Prop({ type: [String], default: [] })
+  specialties?: string[];
+
+  @Prop({ type: [String], default: ['English'] })
+  languages?: string[];
+
+  @Prop({ type: [String], default: [] })
+  serviceAreas?: string[];
+
   @Prop({ default: false })
   emailVerified: boolean;
 
@@ -104,6 +113,12 @@ export class User {
 
   @Prop()
   password?: string; // For email/password auth
+
+  @Prop({ default: 0 })
+  averageRating?: number;
+
+  @Prop({ default: 0 })
+  reviewCount?: number;
 
   @Prop()
   phoneVerificationCode?: string;

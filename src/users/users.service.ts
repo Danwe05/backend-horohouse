@@ -6,6 +6,8 @@ import { v2 as cloudinary } from 'cloudinary';
 
 import { User, UserDocument, UserRole, UserPreferences } from './schemas/user.schema';
 import { CreateUserDto, UpdateUserDto, UpdatePreferencesDto } from './dto';
+import { Property, PropertyDocument, PropertyImages, PropertyStatus } from 'src/properties/schemas/property.schema';
+import { ReviewsService } from 'src/reviews/reviews.service';
 
 @Injectable()
 export class UsersService {
@@ -13,7 +15,9 @@ export class UsersService {
 
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
     private configService: ConfigService,
+    private reviewsService: ReviewsService,
   ) {
     // Configure Cloudinary
     cloudinary.config({
@@ -30,7 +34,7 @@ export class UsersService {
     try {
       const createdUser = new this.userModel(createUserDto);
       await createdUser.save();
-      
+
       this.logger.log(`✅ User created: ${createdUser._id}`);
       return createdUser;
     } catch (error) {
@@ -340,126 +344,126 @@ export class UsersService {
   /**
  * Get viewed properties with pagination and full details
  */
-async getViewedPropertiesWithPagination(
-  userId: string,
-  options: {
-    page?: number;
-    limit?: number;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-  } = {},
-): Promise<{
-  properties: any[];
-  total: number;
-  page: number;
-  totalPages: number;
-  lastViewed?: Date;
-}> {
-  try {
-    const {
-      page = 1,
-      limit = 20,
-      sortBy = 'viewedAt',
-      sortOrder = 'desc',
-    } = options;
+  async getViewedPropertiesWithPagination(
+    userId: string,
+    options: {
+      page?: number;
+      limit?: number;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+    } = {},
+  ): Promise<{
+    properties: any[];
+    total: number;
+    page: number;
+    totalPages: number;
+    lastViewed?: Date;
+  }> {
+    try {
+      const {
+        page = 1,
+        limit = 20,
+        sortBy = 'viewedAt',
+        sortOrder = 'desc',
+      } = options;
 
-    const skip = (page - 1) * limit;
+      const skip = (page - 1) * limit;
 
-    const user = await this.userModel
-      .findById(userId)
-      .select('recentlyViewed')
-      .populate({
-        path: 'recentlyViewed.propertyId',
-        match: { isActive: true },
-        populate: [
-          { path: 'ownerId', select: 'name email phoneNumber profilePicture' },
-          { path: 'agentId', select: 'name email phoneNumber profilePicture agency' }
-        ],
-      })
-      .exec();
+      const user = await this.userModel
+        .findById(userId)
+        .select('recentlyViewed')
+        .populate({
+          path: 'recentlyViewed.propertyId',
+          match: { isActive: true },
+          populate: [
+            { path: 'ownerId', select: 'name email phoneNumber profilePicture' },
+            { path: 'agentId', select: 'name email phoneNumber profilePicture agency' }
+          ],
+        })
+        .exec();
 
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    const validViewedProperties = user.recentlyViewed.filter(
-      (item: any) => item.propertyId !== null
-    );
-
-    const sortedProperties = [...validViewedProperties].sort((a: any, b: any) => {
-      if (sortBy === 'viewedAt') {
-        return sortOrder === 'asc'
-          ? new Date(a.viewedAt).getTime() - new Date(b.viewedAt).getTime()
-          : new Date(b.viewedAt).getTime() - new Date(a.viewedAt).getTime();
+      if (!user) {
+        throw new NotFoundException('User not found');
       }
-      return 0;
-    });
 
-    const paginatedProperties = sortedProperties.slice(skip, skip + limit);
+      const validViewedProperties = user.recentlyViewed.filter(
+        (item: any) => item.propertyId !== null
+      );
 
-    const properties = paginatedProperties.map((item: any) => ({
-      ...item.propertyId.toObject(),
-      viewedAt: item.viewedAt,
-    }));
+      const sortedProperties = [...validViewedProperties].sort((a: any, b: any) => {
+        if (sortBy === 'viewedAt') {
+          return sortOrder === 'asc'
+            ? new Date(a.viewedAt).getTime() - new Date(b.viewedAt).getTime()
+            : new Date(b.viewedAt).getTime() - new Date(a.viewedAt).getTime();
+        }
+        return 0;
+      });
 
-    const total = validViewedProperties.length;
-    const lastViewed = validViewedProperties.length > 0 
-      ? validViewedProperties[0].viewedAt 
-      : undefined;
+      const paginatedProperties = sortedProperties.slice(skip, skip + limit);
 
-    this.logger.log(`Retrieved ${properties.length} viewed properties for user ${userId}`);
+      const properties = paginatedProperties.map((item: any) => ({
+        ...item.propertyId.toObject(),
+        viewedAt: item.viewedAt,
+      }));
 
-    return {
-      properties,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit),
-      lastViewed,
-    };
-  } catch (error) {
-    this.logger.error(`Error getting viewed properties for user ${userId}:`, error);
-    throw error;
+      const total = validViewedProperties.length;
+      const lastViewed = validViewedProperties.length > 0
+        ? validViewedProperties[0].viewedAt
+        : undefined;
+
+      this.logger.log(`Retrieved ${properties.length} viewed properties for user ${userId}`);
+
+      return {
+        properties,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+        lastViewed,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting viewed properties for user ${userId}:`, error);
+      throw error;
+    }
   }
-}
 
-/**
- * Clear user's viewing history
- */
-async clearViewingHistory(userId: string): Promise<{ message: string }> {
-  try {
-    await this.userModel.findByIdAndUpdate(userId, {
-      recentlyViewed: [],
-    });
+  /**
+   * Clear user's viewing history
+   */
+  async clearViewingHistory(userId: string): Promise<{ message: string }> {
+    try {
+      await this.userModel.findByIdAndUpdate(userId, {
+        recentlyViewed: [],
+      });
 
-    this.logger.log(`Cleared viewing history for user ${userId}`);
+      this.logger.log(`Cleared viewing history for user ${userId}`);
 
-    return { message: 'Viewing history cleared successfully' };
-  } catch (error) {
-    this.logger.error(`Error clearing viewing history for user ${userId}:`, error);
-    throw error;
+      return { message: 'Viewing history cleared successfully' };
+    } catch (error) {
+      this.logger.error(`Error clearing viewing history for user ${userId}:`, error);
+      throw error;
+    }
   }
-}
 
-/**
- * Remove specific property from viewing history
- */
-async removeFromViewingHistory(
-  userId: string,
-  propertyId: string,
-): Promise<{ message: string }> {
-  try {
-    await this.userModel.findByIdAndUpdate(userId, {
-      $pull: { recentlyViewed: { propertyId: new Types.ObjectId(propertyId) } },
-    });
+  /**
+   * Remove specific property from viewing history
+   */
+  async removeFromViewingHistory(
+    userId: string,
+    propertyId: string,
+  ): Promise<{ message: string }> {
+    try {
+      await this.userModel.findByIdAndUpdate(userId, {
+        $pull: { recentlyViewed: { propertyId: new Types.ObjectId(propertyId) } },
+      });
 
-    this.logger.log(`Removed property ${propertyId} from viewing history for user ${userId}`);
+      this.logger.log(`Removed property ${propertyId} from viewing history for user ${userId}`);
 
-    return { message: 'Property removed from viewing history' };
-  } catch (error) {
-    this.logger.error(`Error removing property from viewing history:`, error);
-    throw error;
+      return { message: 'Property removed from viewing history' };
+    } catch (error) {
+      this.logger.error(`Error removing property from viewing history:`, error);
+      throw error;
+    }
   }
-}
 
   /**
    * Add search to history
@@ -525,8 +529,8 @@ async removeFromViewingHistory(
       this.userModel.countDocuments(),
       this.userModel.countDocuments({ isActive: true }),
       this.userModel.countDocuments({ role: UserRole.AGENT }),
-      this.userModel.countDocuments({ 
-        $or: [{ emailVerified: true }, { phoneVerified: true }] 
+      this.userModel.countDocuments({
+        $or: [{ emailVerified: true }, { phoneVerified: true }]
       }),
       this.userModel.countDocuments({
         createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
@@ -602,9 +606,9 @@ async removeFromViewingHistory(
       { $limit: limit },
     ]);
 
-    const total = await this.userModel.countDocuments({ 
-      role: UserRole.AGENT, 
-      isActive: true 
+    const total = await this.userModel.countDocuments({
+      role: UserRole.AGENT,
+      isActive: true
     });
 
     return {
@@ -614,6 +618,418 @@ async removeFromViewingHistory(
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  /**
+ * Get agent by ID with full details
+ */
+  async getAgentById(id: string): Promise<any> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid agent ID');
+    }
+
+    const agent = await this.userModel
+      .findOne({ _id: id, role: UserRole.AGENT, isActive: true })
+      .select('-password -sessions -searchHistory')
+      .exec();
+
+    if (!agent) {
+      throw new NotFoundException('Agent not found');
+    }
+
+    // Get real property stats from database
+    const stats = await this.getAgentPropertyStats(id);
+
+    return {
+      id: agent._id.toString(),
+      name: agent.name,
+      email: agent.email,
+      phoneNumber: agent.phoneNumber,
+      profilePicture: agent.profilePicture,
+      agency: agent.agency,
+      bio: agent.bio,
+      city: agent.city,
+      country: agent.country,
+      address: agent.address,
+      location: agent.location,
+      totalProperties: stats.totalProperties,
+      activeProperties: stats.activeProperties,
+      propertiesSold: stats.propertiesSold,
+      propertiesListed: stats.totalProperties,
+      licenseNumber: agent.licenseNumber,
+      yearsOfExperience: this.calculateYearsOfExperience(agent.createdAt),
+      specialties: this.getAgentSpecialties(agent, stats),
+      languages: agent.languages || ['English', 'French'], // Default if not set
+      serviceAreas: this.getAgentServiceAreas(agent, stats.cities),
+      createdAt: agent.createdAt,
+    };
+  }
+
+  /**
+   * Get agent statistics from real data
+   */
+  async getAgentStats(id: string): Promise<any> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid agent ID');
+    }
+
+    const agent = await this.userModel
+      .findOne({ _id: id, role: UserRole.AGENT, isActive: true })
+      .exec();
+
+    if (!agent) {
+      throw new NotFoundException('Agent not found');
+    }
+
+    const stats = await this.getAgentPropertyStats(id);
+
+    // Calculate average rating from reviews (when review system is implemented)
+    // For now using a calculated rating based on performance
+    const reviewStats = await this.getAgentReviewStats(id);
+
+    return {
+      rating: reviewStats.averageRating,
+      reviewCount: reviewStats.totalReviews,
+      propertiesSold: stats.propertiesSold,
+      experience: this.calculateYearsOfExperience(agent.createdAt),
+      successRate: this.calculateSuccessRate(stats),
+      awards: this.calculateAwards(stats),
+    };
+  }
+
+  /**
+   * Get agent properties with real database queries
+   */
+  async getAgentProperties(
+    agentId: string,
+    options: {
+      status?: string;
+      page?: number;
+      limit?: number;
+    } = {},
+  ): Promise<any> {
+    if (!Types.ObjectId.isValid(agentId)) {
+      throw new BadRequestException('Invalid agent ID');
+    }
+
+    const agent = await this.userModel
+      .findOne({ _id: agentId, role: UserRole.AGENT, isActive: true })
+      .exec();
+
+    if (!agent) {
+      throw new NotFoundException('Agent not found');
+    }
+
+    const { status, page = 1, limit = 100 } = options;
+    const skip = (page - 1) * limit;
+
+    // Build query to find properties where user is agent or owner
+    const query: any = {
+      $or: [
+        { agentId: new Types.ObjectId(agentId) },
+        { ownerId: new Types.ObjectId(agentId) },
+      ],
+      isActive: true,
+    };
+
+    // Map frontend status to backend availability
+    if (status) {
+      const statusMap: { [key: string]: PropertyStatus } = {
+        'For Sale': PropertyStatus.ACTIVE,
+        'For Rent': PropertyStatus.ACTIVE,
+        'Pending': PropertyStatus.PENDING,
+        'Sold': PropertyStatus.SOLD,
+      };
+
+      if (status === 'For Sale' || status === 'For Rent') {
+        query.availability = PropertyStatus.ACTIVE;
+        // No additional filter - will show both
+      } else if (statusMap[status]) {
+        query.availability = statusMap[status];
+      }
+    }
+
+    const [properties, total] = await Promise.all([
+      this.propertyModel
+        .find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('ownerId', 'name email phoneNumber profilePicture')
+        .populate('agentId', 'name email phoneNumber profilePicture agency')
+        .exec(),
+      this.propertyModel.countDocuments(query),
+    ]);
+
+    // Map properties to frontend format
+    const mappedProperties = properties.map(p => {
+      const prop = p.toObject(); // Convert to plain object
+      return {
+        id: (p._id as Types.ObjectId).toString(),
+        images: (prop.images || []).map((img: PropertyImages) => img.url),
+        price: prop.price,
+        address: prop.address,
+        city: prop.city,
+        state: prop.country,
+        bedrooms: prop.amenities?.bedrooms || 0,
+        bathrooms: prop.amenities?.bathrooms || 0,
+        squareFeet: prop.area || 0,
+        status: this.mapAvailabilityToStatus(prop.availability, prop.listingType),
+        propertyType: this.capitalizePropertyType(prop.type),
+        soldDate: prop.availability === PropertyStatus.SOLD ? p.updatedAt.toISOString() : undefined,
+        listingType: prop.listingType,
+        latitude: prop.location?.coordinates?.[1] || prop.latitude,
+        longitude: prop.location?.coordinates?.[0] || prop.longitude,
+      };
+    });
+
+    this.logger.log(`Retrieved ${mappedProperties.length} properties for agent ${agentId}`);
+
+    return {
+      properties: mappedProperties,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Get agent reviews - Real implementation
+   * NOTE: You'll need to create a Review schema. For now, returning empty array.
+   * Uncomment the real implementation once Review model is created.
+   */
+  /**
+ * Get agent reviews - Real implementation
+ */
+  async getAgentReviews(
+    agentId: string,
+    options: {
+      page?: number;
+      limit?: number;
+    } = {},
+  ): Promise<any> {
+    if (!Types.ObjectId.isValid(agentId)) {
+      throw new BadRequestException('Invalid agent ID');
+    }
+
+    const agent = await this.userModel
+      .findOne({ _id: agentId, role: UserRole.AGENT, isActive: true })
+      .exec();
+
+    if (!agent) {
+      throw new NotFoundException('Agent not found');
+    }
+
+    // This will now work with the Review model
+    // Import ReviewsService and inject it in the constructor
+    const { page = 1, limit = 20 } = options;
+
+    return this.reviewsService.getAgentReviews(agentId, { page, limit });
+  }
+
+  /**
+   * Get review statistics (real implementation)
+   */
+  private async getAgentReviewStats(agentId: string): Promise<{
+    averageRating: number;
+    totalReviews: number;
+  }> {
+    // Use the ReviewsService instead of placeholder
+    const stats = await this.reviewsService.getAgentReviewStats(agentId);
+
+    return {
+      averageRating: stats.averageRating,
+      totalReviews: stats.totalReviews,
+    };
+  }
+  // ==========================================
+  // PRIVATE HELPER METHODS
+  // ==========================================
+
+  /**
+   * Get agent property statistics from real database
+   */
+  private async getAgentPropertyStats(agentId: string): Promise<{
+    totalProperties: number;
+    activeProperties: number;
+    propertiesSold: number;
+    cities: string[];
+  }> {
+    const agentObjectId = new Types.ObjectId(agentId);
+
+    const stats = await this.propertyModel.aggregate([
+      {
+        $match: {
+          $or: [
+            { agentId: agentObjectId },
+            { ownerId: agentObjectId },
+          ],
+          isActive: true,
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalProperties: { $sum: 1 },
+          activeProperties: {
+            $sum: {
+              $cond: [
+                { $eq: ['$availability', PropertyStatus.ACTIVE] },
+                1,
+                0,
+              ],
+            },
+          },
+          propertiesSold: {
+            $sum: {
+              $cond: [
+                { $eq: ['$availability', PropertyStatus.SOLD] },
+                1,
+                0,
+              ],
+            },
+          },
+          cities: { $addToSet: '$city' },
+        },
+      },
+    ]);
+
+    if (!stats || stats.length === 0) {
+      return {
+        totalProperties: 0,
+        activeProperties: 0,
+        propertiesSold: 0,
+        cities: [],
+      };
+    }
+
+    return {
+      totalProperties: stats[0].totalProperties || 0,
+      activeProperties: stats[0].activeProperties || 0,
+      propertiesSold: stats[0].propertiesSold || 0,
+      cities: stats[0].cities || [],
+    };
+  }
+
+  /**
+   * Get review statistics (placeholder until Review model is created)
+   */
+
+
+  /**
+   * Calculate years of experience based on account creation
+   */
+  private calculateYearsOfExperience(createdAt: Date): number {
+    const years = Math.floor((Date.now() - createdAt.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+    return Math.max(years, 1); // Minimum 1 year for display purposes
+  }
+
+  /**
+   * Calculate success rate from property stats
+   */
+  private calculateSuccessRate(stats: { totalProperties: number; propertiesSold: number }): number {
+    if (stats.totalProperties === 0) return 95; // Default for new agents
+    const rate = (stats.propertiesSold / stats.totalProperties) * 100;
+    return Math.min(Math.round(rate), 100);
+  }
+
+  /**
+   * Calculate awards based on performance metrics
+   */
+  private calculateAwards(stats: { propertiesSold: number; totalProperties: number }): number {
+    let awards = 0;
+
+    // Awards for properties sold
+    if (stats.propertiesSold >= 10) awards += 2;
+    if (stats.propertiesSold >= 50) awards += 3;
+    if (stats.propertiesSold >= 100) awards += 5;
+    if (stats.propertiesSold >= 200) awards += 5;
+
+    // Awards for total listings
+    if (stats.totalProperties >= 20) awards += 2;
+    if (stats.totalProperties >= 50) awards += 3;
+
+    return awards;
+  }
+
+  /**
+   * Get agent specialties based on their property portfolio
+   */
+  private getAgentSpecialties(agent: any, stats: any): string[] {
+    const specialties: string[] = [];
+
+    // Use stored specialties if available
+    if (agent.specialties && agent.specialties.length > 0) {
+      return agent.specialties;
+    }
+
+    // Otherwise, generate based on performance
+    if (stats.propertiesSold > 100) {
+      specialties.push('Luxury Homes');
+    }
+
+    if (stats.totalProperties > 50) {
+      specialties.push('Investment Properties');
+    }
+
+    if (stats.propertiesSold < 20 && stats.activeProperties > 5) {
+      specialties.push('First-Time Buyers');
+    }
+
+    // Default specialty if none match
+    if (specialties.length === 0) {
+      specialties.push('Residential Properties');
+    }
+
+    return specialties;
+  }
+
+  /**
+   * Get agent service areas from their property locations
+   */
+  private getAgentServiceAreas(agent: any, cities: string[]): string[] {
+    // Use stored service areas if available
+    if (agent.serviceAreas && agent.serviceAreas.length > 0) {
+      return agent.serviceAreas;
+    }
+
+    // Otherwise, use cities where they have properties
+    if (cities && cities.length > 0) {
+      return cities.slice(0, 5); // Top 5 cities
+    }
+
+    // Fallback to agent's city
+    if (agent.city) {
+      return [agent.city];
+    }
+
+    return ['Downtown']; // Default
+  }
+
+  /**
+   * Map backend availability status to frontend display status
+   */
+  private mapAvailabilityToStatus(availability: PropertyStatus, listingType: string): string {
+    switch (availability) {
+      case PropertyStatus.ACTIVE:
+        return listingType === 'rent' ? 'For Rent' : 'For Sale';
+      case PropertyStatus.SOLD:
+        return 'Sold';
+      case PropertyStatus.RENTED:
+        return 'Rented';
+      case PropertyStatus.PENDING:
+        return 'Pending';
+      default:
+        return 'For Sale';
+    }
+  }
+
+  /**
+   * Capitalize property type for display
+   */
+  private capitalizePropertyType(type: string): string {
+    return type.charAt(0).toUpperCase() + type.slice(1);
   }
 
   /**

@@ -20,7 +20,7 @@ export class EmailService {
    */
   async sendWelcomeEmail(recipientEmail: string, recipientName?: string): Promise<void> {
     const brandName = this.configService.get<string>('BRAND_NAME', 'HoroHouse');
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3001');
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
 
     const displayName = recipientName?.trim() || 'there';
     const subject = `Welcome to ${brandName}!`;
@@ -189,6 +189,159 @@ private buildPasswordResetConfirmationTemplate(params: {
               </p>
             </div>
             <p style="line-height: 1.6; margin: 24px 0 0;">— The ${brandName} Team</p>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+}
+
+/**
+ * Send saved search notification email with new property matches
+ */
+async sendSavedSearchNotification(
+  recipientEmail: string,
+  recipientName: string,
+  searchName: string,
+  newProperties: any[],
+  searchId: string,
+): Promise<void> {
+  const brandName = this.configService.get<string>('BRAND_NAME', 'HoroHouse');
+  const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3001');
+
+  const displayName = recipientName?.trim() || 'there';
+  const propertyCount = newProperties.length;
+  const subject = `${propertyCount} New ${propertyCount === 1 ? 'Property' : 'Properties'} Match Your "${searchName}" Search`;
+  
+  const searchUrl = `${frontendUrl}/saved-searches/${searchId}`;
+  const manageSearchesUrl = `${frontendUrl}/saved-searches`;
+
+  // Build property list for text email
+  const propertyList = newProperties
+    .map((prop, index) => 
+      `${index + 1}. ${prop.title}\n   ${prop.type} - ${prop.listingType}\n   ${prop.city}, ${prop.state}\n   Price: ${prop.currency || 'XAF'} ${prop.price.toLocaleString()}\n   View: ${frontendUrl}/properties/${prop._id}`
+    )
+    .join('\n\n');
+
+  const text = `Hi ${displayName},\n\nWe found ${propertyCount} new ${propertyCount === 1 ? 'property' : 'properties'} matching your saved search "${searchName}"!\n\n${propertyList}\n\nView all matching properties: ${searchUrl}\n\nManage your saved searches: ${manageSearchesUrl}\n\nTo stop receiving notifications for this search, visit the link above and adjust your notification settings.\n\n— The ${brandName} Team`;
+
+  const html = this.buildSavedSearchNotificationTemplate({
+    brandName,
+    recipientName: displayName,
+    searchName,
+    newProperties,
+    searchUrl,
+    manageSearchesUrl,
+    frontendUrl,
+  });
+
+  await this.safeSendMail({ to: recipientEmail, subject, html, text });
+}
+
+/**
+ * Saved search notification email template
+ */
+private buildSavedSearchNotificationTemplate(params: {
+  brandName: string;
+  recipientName: string;
+  searchName: string;
+  newProperties: any[];
+  searchUrl: string;
+  manageSearchesUrl: string;
+  frontendUrl: string;
+}): string {
+  const { brandName, recipientName, searchName, newProperties, searchUrl, manageSearchesUrl, frontendUrl } = params;
+  
+  const propertyCount = newProperties.length;
+  const propertiesHtml = newProperties
+    .map(
+      (prop) => `
+        <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 16px; background: #f8fafc;">
+          <h3 style="margin: 0 0 8px; font-size: 16px; color: #0f172a;">
+            <a href="${frontendUrl}/properties/${prop._id}" style="color: #2563eb; text-decoration: none;">${prop.title}</a>
+          </h3>
+          <p style="margin: 4px 0; font-size: 14px; color: #64748b;">
+            <strong>${prop.type}</strong> • ${prop.listingType}
+          </p>
+          <p style="margin: 4px 0; font-size: 14px; color: #64748b;">
+            📍 ${prop.city}, ${prop.state || ''}
+          </p>
+          <p style="margin: 8px 0 0; font-size: 18px; font-weight: 600; color: #10b981;">
+            ${prop.currency || 'XAF'} ${prop.price.toLocaleString()}
+          </p>
+          ${prop.amenities?.bedrooms || prop.amenities?.bathrooms ? `
+            <p style="margin: 8px 0 0; font-size: 14px; color: #64748b;">
+              ${prop.amenities.bedrooms ? `🛏️ ${prop.amenities.bedrooms} bed` : ''} 
+              ${prop.amenities.bathrooms ? `🚿 ${prop.amenities.bathrooms} bath` : ''}
+            </p>
+          ` : ''}
+        </div>
+      `
+    )
+    .join('');
+
+  return `
+    <div style="font-family: Arial, Helvetica, sans-serif; background-color: #f6f9fc; padding: 24px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden;">
+        <tr>
+          <td style="padding: 24px; background: #0f172a; color: #ffffff;">
+            <h1 style="margin: 0; font-size: 20px;">${brandName}</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 24px; color: #0f172a;">
+            <div style="text-align: center; margin-bottom: 16px;">
+              <div style="display: inline-block; background: #10b981; color: #ffffff; border-radius: 50%; width: 56px; height: 56px; line-height: 56px; font-size: 32px;">
+                🔔
+              </div>
+            </div>
+            <h2 style="margin: 0 0 16px; text-align: center; color: #0f172a;">
+              ${propertyCount} New ${propertyCount === 1 ? 'Property' : 'Properties'} Found!
+            </h2>
+            <p style="line-height: 1.6; margin: 16px 0;">
+              Hi ${recipientName},
+            </p>
+            <p style="line-height: 1.6; margin: 16px 0;">
+              Great news! We found ${propertyCount} new ${propertyCount === 1 ? 'property' : 'properties'} matching your saved search "<strong>${searchName}</strong>".
+            </p>
+            
+            <div style="margin: 24px 0;">
+              ${propertiesHtml}
+            </div>
+
+            ${newProperties.length > 3 ? `
+              <p style="line-height: 1.6; margin: 16px 0; text-align: center; color: #64748b;">
+                And more...
+              </p>
+            ` : ''}
+
+            <div style="margin-top: 24px; text-align: center;">
+              <a href="${searchUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; margin-right: 8px;">View All Matches</a>
+            </div>
+
+            <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
+              <p style="line-height: 1.6; margin: 0; font-size: 14px; color: #475569;">
+                <strong>Manage Your Searches</strong>
+              </p>
+              <p style="line-height: 1.6; margin: 8px 0 0; font-size: 14px; color: #475569;">
+                You can adjust notification settings or delete this search at any time.
+              </p>
+              <p style="margin: 8px 0 0;">
+                <a href="${manageSearchesUrl}" style="color: #2563eb; font-size: 14px; text-decoration: none;">Manage Saved Searches →</a>
+              </p>
+            </div>
+
+            <p style="line-height: 1.6; margin: 24px 0 0;">— The ${brandName} Team</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 16px 24px; background: #f8fafc; color: #64748b; font-size: 12px; text-align: center;">
+            <p style="margin: 0;">
+              You're receiving this email because you saved a search on ${brandName}.
+            </p>
+            <p style="margin: 8px 0 0;">
+              <a href="${manageSearchesUrl}" style="color: #64748b; text-decoration: underline;">Update preferences</a>
+            </p>
           </td>
         </tr>
       </table>

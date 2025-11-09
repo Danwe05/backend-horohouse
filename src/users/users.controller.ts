@@ -260,6 +260,60 @@ export class UsersController {
     );
   }
 
+  @Get('agents/:id')
+  @Public()
+  @ApiOperation({ summary: 'Get agent by ID with full details' })
+  @ApiResponse({ status: 200, description: 'Agent details retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Agent not found' })
+  async getAgentById(@Param('id') id: string) {
+    return this.usersService.getAgentById(id);
+  }
+
+  @Get('agents/:id/stats')
+  @Public()
+  @ApiOperation({ summary: 'Get agent statistics' })
+  @ApiResponse({ status: 200, description: 'Agent stats retrieved successfully' })
+  async getAgentStats(@Param('id') id: string) {
+    return this.usersService.getAgentStats(id);
+  }
+
+  @Get('agents/:id/properties')
+  @Public()
+  @ApiOperation({ summary: 'Get agent properties' })
+  @ApiQuery({ name: 'status', required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Agent properties retrieved successfully' })
+  async getAgentProperties(
+    @Param('id') id: string,
+    @Query('status') status?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.usersService.getAgentProperties(id, {
+      status,
+      page: page ? parseInt(page.toString()) : 1,
+      limit: limit ? parseInt(limit.toString()) : 100,
+    });
+  }
+
+  @Get('agents/:id/reviews')
+  @Public()
+  @ApiOperation({ summary: 'Get agent reviews' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Agent reviews retrieved successfully' })
+  async getAgentReviews(
+    @Param('id') id: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.usersService.getAgentReviews(id, {
+      page: page ? parseInt(page.toString()) : 1,
+      limit: limit ? parseInt(limit.toString()) : 20,
+    });
+  }
+
   @Get(':id')
   @Public()
   @ApiOperation({ summary: 'Get user by ID' })

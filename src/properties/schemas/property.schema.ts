@@ -198,6 +198,12 @@ export class Property {
   @Prop({ default: true })
   isActive: boolean;
 
+  @Prop({ default: 0 })
+  averageRating?: number;
+
+  @Prop({ default: 0 })
+  reviewCount?: number;
+
   // Virtual tour links
   @Prop()
   virtualTourUrl?: string;
