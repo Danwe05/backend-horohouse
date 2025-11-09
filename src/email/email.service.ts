@@ -207,7 +207,7 @@ async sendSavedSearchNotification(
   searchId: string,
 ): Promise<void> {
   const brandName = this.configService.get<string>('BRAND_NAME', 'HoroHouse');
-  const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3001');
+  const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'https://horohouse-beta.vercel.app');
 
   const displayName = recipientName?.trim() || 'there';
   const propertyCount = newProperties.length;
