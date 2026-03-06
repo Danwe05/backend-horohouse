@@ -1,0 +1,109 @@
+[
+  {
+    "target": {
+      "reviewType": "stay",
+      "bookingId": "69a87d8ee74ad9f692960bbb",
+      "rating": 5,
+      "staySubRatings": {
+        "cleanliness": 0,
+        "accuracy": 0,
+        "checkIn": 0,
+        "communication": 3,
+        "location": 0,
+        "value": 0
+      },
+      "comment": "gfgfgfgfgfg"
+    },
+    "value": {
+      "cleanliness": 0,
+      "accuracy": 0,
+      "checkIn": 0,
+      "communication": 3,
+      "location": 0,
+      "value": 0
+    },
+    "property": "staySubRatings",
+    "children": [
+      {
+        "target": {
+          "cleanliness": 0,
+          "accuracy": 0,
+          "checkIn": 0,
+          "communication": 3,
+          "location": 0,
+          "value": 0
+        },
+        "value": 0,
+        "property": "cleanliness",
+        "children": [],
+        "constraints": {
+          "min": "cleanliness must not be less than 1"
+        }
+      },
+      {
+        "target": {
+          "cleanliness": 0,
+          "accuracy": 0,
+          "checkIn": 0,
+          "communication": 3,
+          "location": 0,
+          "value": 0
+        },
+        "value": 0,
+        "property": "accuracy",
+        "children": [],
+        "constraints": {
+          "min": "accuracy must not be less than 1"
+        }
+      },
+      {
+        "target": {
+          "cleanliness": 0,
+          "accuracy": 0,
+          "checkIn": 0,
+          "communication": 3,
+          "location": 0,
+          "value": 0
+        },
+        "value": 0,
+        "property": "checkIn",
+        "children": [],
+        "constraints": {
+          "min": "checkIn must not be less than 1"
+        }
+      },
+      {
+        "target": {
+          "cleanliness": 0,
+          "accuracy": 0,
+          "checkIn": 0,
+          "communication": 3,
+          "location": 0,
+          "value": 0
+        },
+        "value": 0,
+        "property": "location",
+        "children": [],
+        "constraints": {
+          "min": "location must not be less than 1"
+        }
+      },
+      {
+        "target": {
+          "cleanliness": 0,
+          "accuracy": 0,
+          "checkIn": 0,
+          "communication": 3,
+          "location": 0,
+          "value": 0
+        },
+        "value": 0,
+        "property": "value",
+        "children": [],
+        "constraints": {
+          "min": "value must not be less than 1"
+        }
+      }
+    ]
+  }
+]
