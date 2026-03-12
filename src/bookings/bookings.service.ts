@@ -12,6 +12,7 @@ import { Model, Types } from 'mongoose';
 import { Booking, BookingDocument, BookingStatus, PaymentStatus, CancelledBy } from './schema/booking.schema';
 import { Property, PropertyDocument, PropertyStatus, ApprovalStatus } from '../properties/schemas/property.schema';
 import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
+import { RoomsService } from '../rooms/rooms.service';
 import {
   CreateBookingDto,
   CancelBookingDto,
@@ -53,6 +54,7 @@ export class BookingsService {
     @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,
     @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
+    private readonly roomsService: RoomsService,
   ) { }
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -127,6 +129,25 @@ export class BookingsService {
       );
     }
 
+    // ── 2b. Advance notice & booking window validation ───────────────────────
+    const advanceNoticeDays = (property as any).advanceNoticeDays ?? 0;
+    const bookingWindowDays = (property as any).bookingWindowDays ?? 365;
+    const daysTilCheckin = Math.ceil(
+      (checkIn.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    );
+
+    if (daysTilCheckin < advanceNoticeDays) {
+      throw new BadRequestException(
+        `This property requires at least ${advanceNoticeDays} day(s) advance notice before check-in`,
+      );
+    }
+
+    if (daysTilCheckin > bookingWindowDays) {
+      throw new BadRequestException(
+        `Bookings can only be made up to ${bookingWindowDays} day(s) in advance for this property`,
+      );
+    }
+
     // ── 3. Check guest count ─────────────────────────────────────────────────
     const maxGuests = (property as any).shortTermAmenities?.maxGuests ?? 99;
     const totalGuests = dto.guests.adults + (dto.guests.children ?? 0);
@@ -138,7 +159,12 @@ export class BookingsService {
     }
 
     // ── 4. Availability check ────────────────────────────────────────────────
-    await this.assertDatesAvailable(dto.propertyId, checkIn, checkOut);
+    // If a roomId is provided, delegate to room-level check; otherwise check property-wide
+    if (dto.roomId) {
+      await this.roomsService.assertRoomDatesAvailable(dto.roomId, checkIn, checkOut);
+    } else {
+      await this.assertDatesAvailable(dto.propertyId, checkIn, checkOut);
+    }
 
     // ── 5. Build price breakdown ─────────────────────────────────────────────
     const priceBreakdown = this.computePrice(property, nights);
@@ -154,6 +180,7 @@ export class BookingsService {
     // ── 8. Persist ───────────────────────────────────────────────────────────
     const booking = new this.bookingModel({
       propertyId: new Types.ObjectId(dto.propertyId),
+      ...(dto.roomId ? { roomId: new Types.ObjectId(dto.roomId) } : {}),
       guestId: guest._id,
       hostId,
       checkIn,
@@ -365,16 +392,27 @@ export class BookingsService {
   // ════════════════════════════════════════════════════════════════════════════
 
   /**
-   * Returns blocked date ranges for a property within a date window.
+   * Returns blocked date ranges for a property (or specific room) within a date window.
    * Used by the frontend calendar widget.
    */
   async getAvailability(
     propertyId: string,
     from: Date,
     to: Date,
+    roomId?: string,
   ): Promise<AvailabilityResult> {
     const property = await this.propertyModel.findById(propertyId).exec();
     if (!property) throw new NotFoundException('Property not found');
+
+    // If a roomId is provided, delegate to room-level availability
+    if (roomId) {
+      const roomResult = await this.roomsService.getRoomAvailability(roomId, from, to);
+      return {
+        available: roomResult.available,
+        unavailableDates: roomResult.unavailableDates.map((r) => ({ from: r.from, to: r.to })),
+        bookedRanges: roomResult.bookedRanges.map((r) => ({ checkIn: r.checkIn, checkOut: r.checkOut })),
+      };
+    }
 
     // 1. Host-blocked ranges stored directly on the property
     const hostBlockedRanges: { from: Date; to: Date }[] =
@@ -382,10 +420,11 @@ export class BookingsService {
         (r: any) => r.from < to && r.to > from,
       );
 
-    // 2. Confirmed / pending bookings in the window
+    // 2. Confirmed / pending bookings in the window (property-wide, no room)
     const bookedRanges = await this.bookingModel
       .find({
         propertyId: new Types.ObjectId(propertyId),
+        roomId: { $exists: false },  // only whole-property bookings
         status: { $in: [BookingStatus.CONFIRMED, BookingStatus.PENDING] },
         checkIn: { $lt: to },
         checkOut: { $gt: from },
@@ -542,7 +581,13 @@ export class BookingsService {
     const cleaningFee = property.cleaningFee ?? 0;
     const serviceFee = Math.round(subtotal * SERVICE_FEE_RATE);
     const taxAmount = 0; // extend as needed
-    const discountAmount = this.computeDiscount(subtotal, nights);
+    // Use host-configured discount percentages (fall back to platform defaults)
+    const discountAmount = this.computeDiscount(
+      subtotal,
+      nights,
+      property.weeklyDiscountPercent ?? 10,
+      property.monthlyDiscountPercent ?? 15,
+    );
     const totalAmount = subtotal + cleaningFee + serviceFee + taxAmount - discountAmount;
 
     return {
@@ -558,12 +603,17 @@ export class BookingsService {
   }
 
   /**
-   * Apply weekly (≥7 nights) or monthly (≥28 nights) discount.
-   * Extend this to use property-specific discount rates if needed.
+   * Apply weekly (≥7 nights) or monthly (≥28 nights) discount using
+   * the host-configured percentage rates stored on the property.
    */
-  private computeDiscount(subtotal: number, nights: number): number {
-    if (nights >= 28) return Math.round(subtotal * 0.15); // 15% monthly discount
-    if (nights >= 7) return Math.round(subtotal * 0.10); // 10% weekly discount
+  private computeDiscount(
+    subtotal: number,
+    nights: number,
+    weeklyPct: number,
+    monthlyPct: number,
+  ): number {
+    if (nights >= 28) return Math.round(subtotal * (monthlyPct / 100));
+    if (nights >= 7) return Math.round(subtotal * (weeklyPct / 100));
     return 0;
   }
 

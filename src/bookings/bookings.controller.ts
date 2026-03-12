@@ -39,7 +39,7 @@ import { User, UserRole } from '../users/schemas/user.schema';
 @Controller('bookings')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class BookingsController {
-  constructor(private readonly bookingsService: BookingsService) {}
+  constructor(private readonly bookingsService: BookingsService) { }
 
   // ════════════════════════════════════════════════════════════════════════════
   // GUEST — CREATE & VIEW OWN BOOKINGS
@@ -63,11 +63,11 @@ export class BookingsController {
   @Roles(UserRole.REGISTERED_USER, UserRole.GUEST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get the current user's bookings (as guest)" })
-  @ApiQuery({ name: 'page',      required: false, type: Number })
-  @ApiQuery({ name: 'limit',     required: false, type: Number })
-  @ApiQuery({ name: 'status',    required: false, type: String })
-  @ApiQuery({ name: 'fromDate',  required: false, type: String })
-  @ApiQuery({ name: 'toDate',    required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'status', required: false, type: String })
+  @ApiQuery({ name: 'fromDate', required: false, type: String })
+  @ApiQuery({ name: 'toDate', required: false, type: String })
   @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
   @ApiResponse({ status: 200, description: 'Paginated list of guest bookings' })
   async getMyBookings(
@@ -102,11 +102,11 @@ export class BookingsController {
   @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all bookings for properties you host' })
-  @ApiQuery({ name: 'page',      required: false, type: Number })
-  @ApiQuery({ name: 'limit',     required: false, type: Number })
-  @ApiQuery({ name: 'status',    required: false, type: String })
-  @ApiQuery({ name: 'fromDate',  required: false, type: String })
-  @ApiQuery({ name: 'toDate',    required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'status', required: false, type: String })
+  @ApiQuery({ name: 'fromDate', required: false, type: String })
+  @ApiQuery({ name: 'toDate', required: false, type: String })
   @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
   @ApiResponse({ status: 200, description: 'Paginated list of host bookings' })
   async getHostBookings(
@@ -171,7 +171,7 @@ export class BookingsController {
   @ApiOperation({ summary: 'Get blocked/booked date ranges for a property (calendar widget)' })
   @ApiParam({ name: 'propertyId', description: 'Property ID' })
   @ApiQuery({ name: 'from', required: true, type: String, description: 'Range start (ISO date)' })
-  @ApiQuery({ name: 'to',   required: true, type: String, description: 'Range end (ISO date)' })
+  @ApiQuery({ name: 'to', required: true, type: String, description: 'Range end (ISO date)' })
   @ApiResponse({ status: 200, description: 'Availability result with booked and blocked ranges' })
   async getAvailability(
     @Param('propertyId') propertyId: string,
@@ -184,6 +184,7 @@ export class BookingsController {
       propertyId,
       new Date(query.from),
       new Date(query.to),
+      query.roomId,
     );
   }
 
@@ -192,8 +193,8 @@ export class BookingsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all bookings for a specific property (host / admin only)' })
   @ApiParam({ name: 'propertyId', description: 'Property ID' })
-  @ApiQuery({ name: 'page',   required: false, type: Number })
-  @ApiQuery({ name: 'limit',  required: false, type: Number })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'status', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Paginated bookings for the property' })
   async getPropertyBookings(
@@ -211,11 +212,11 @@ export class BookingsController {
   @Roles(UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Admin: Get all bookings across the platform' })
-  @ApiQuery({ name: 'page',      required: false, type: Number })
-  @ApiQuery({ name: 'limit',     required: false, type: Number })
-  @ApiQuery({ name: 'status',    required: false, type: String })
-  @ApiQuery({ name: 'fromDate',  required: false, type: String })
-  @ApiQuery({ name: 'toDate',    required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'status', required: false, type: String })
+  @ApiQuery({ name: 'fromDate', required: false, type: String })
+  @ApiQuery({ name: 'toDate', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Paginated list of all bookings' })
   async getAllBookings(@Query() query: BookingQueryDto) {
     return this.bookingsService.getAllBookings(query);

@@ -24,14 +24,33 @@ export class PaymentsService {
 
   constructor(
     @InjectModel(Transaction.name) private transactionModel: Model<TransactionDocument>,
-    @InjectModel(Booking.name)     private bookingModel:     Model<BookingDocument>,  // ← ADDED
+    @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,  // ← ADDED
     private flutterwaveService: FlutterwaveService,
     private configService: ConfigService,
-  ) {}
+  ) { }
 
   // ════════════════════════════════════════════════════════════════════════
   // EXISTING — initializePayment (unchanged)
   // ════════════════════════════════════════════════════════════════════════
+
+  // ════════════════════════════════════════════════════════════════════════
+  // PRIVATE: Build a valid email for Flutterwave
+  // Flutterwave requires a non-empty customer_email.
+  // If the user has no email, generate a placeholder from their phone number.
+  // ════════════════════════════════════════════════════════════════════════
+  private resolveCustomerEmail(user: User, override?: string | null): string {
+    if (override) return override;
+    if (user.email) return user.email;
+    const phone = (user as any).phoneNumber;
+    if (phone) {
+      // Strip non-alphanumeric chars and use as a placeholder
+      const sanitised = phone.replace(/[^a-zA-Z0-9]/g, '');
+      return `${sanitised}@noreply.horohouse.com`;
+    }
+    throw new BadRequestException(
+      'Your account has no email address. Please add an email to your profile before making a payment.',
+    );
+  }
 
   async initializePayment(
     dto: InitializePaymentDto,
@@ -47,22 +66,22 @@ export class PaymentsService {
       );
 
       const transaction = new this.transactionModel({
-        userId:               user._id,
-        amount:               dto.amount,
-        currency:             dto.currency || Currency.XAF,
-        type:                 dto.type,
-        status:               TransactionStatus.PENDING,
-        paymentMethod:        dto.paymentMethod,
+        userId: user._id,
+        amount: dto.amount,
+        currency: dto.currency || Currency.XAF,
+        type: dto.type,
+        status: TransactionStatus.PENDING,
+        paymentMethod: dto.paymentMethod,
         flutterwaveReference: txRef,
-        propertyId:           dto.propertyId ? new Types.ObjectId(dto.propertyId) : undefined,
-        description:          dto.description || this.getTransactionDescription(dto),
-        metadata:             dto.metadata,
+        propertyId: dto.propertyId ? new Types.ObjectId(dto.propertyId) : undefined,
+        description: dto.description || this.getTransactionDescription(dto),
+        metadata: dto.metadata,
         platformFee,
         paymentProcessingFee,
         netAmount,
-        customerName:         dto.customerName  || user.name,
-        customerEmail:        dto.customerEmail || user.email,
-        customerPhone:        dto.customerPhone || user.phoneNumber,
+        customerName: dto.customerName || user.name,
+        customerEmail: dto.customerEmail || user.email,
+        customerPhone: dto.customerPhone || user.phoneNumber,
       });
 
       await transaction.save();
@@ -71,25 +90,25 @@ export class PaymentsService {
         `${this.configService.get('FRONTEND_URL')}/payment/callback`;
 
       const flutterwavePayload = {
-        tx_ref:       txRef,
-        amount:       dto.amount,
-        currency:     dto.currency || Currency.XAF,
+        tx_ref: txRef,
+        amount: dto.amount,
+        currency: dto.currency || Currency.XAF,
         redirect_url: redirectUrl,
         customer: {
-          email:       dto.customerEmail || user.email || '',
-          phonenumber: dto.customerPhone || user.phoneNumber,
-          name:        dto.customerName  || user.name,
+          email: this.resolveCustomerEmail(user, dto.customerEmail),
+          phonenumber: dto.customerPhone || (user as any).phoneNumber || '',
+          name: dto.customerName || user.name,
         },
         customizations: {
-          title:       'HoroHouse Payment',
+          title: 'HoroHouse Payment',
           description: transaction.description || 'Payment for HoroHouse services',
-          logo:        this.configService.get('APP_LOGO_URL'),
+          logo: this.configService.get('APP_LOGO_URL'),
         },
         payment_options: this.getPaymentOptions(dto.paymentMethod),
         meta: {
           transactionId: transaction._id.toString(),
-          userId:        user._id.toString(),
-          type:          dto.type,
+          userId: user._id.toString(),
+          type: dto.type,
           paymentMethod: dto.paymentMethod,
           ...dto.metadata,
         },
@@ -100,9 +119,9 @@ export class PaymentsService {
       );
 
       const paymentLink = flutterwaveResponse.data.link;
-      transaction.flutterwavePaymentLink   = paymentLink;
+      transaction.flutterwavePaymentLink = paymentLink;
       transaction.flutterwaveTransactionId = flutterwaveResponse.data?.id?.toString();
-      transaction.paymentProviderResponse  = flutterwaveResponse;
+      transaction.paymentProviderResponse = flutterwaveResponse;
       await transaction.save();
 
       this.logger.log(`Payment initialized: ${transaction._id}, Link: ${paymentLink}`);
@@ -146,21 +165,21 @@ export class PaymentsService {
     // ── Idempotency: reuse if a pending transaction already exists ──────────
     const existing = await this.transactionModel.findOne({
       bookingId: new Types.ObjectId(bookingId),
-      status:    TransactionStatus.PENDING,
+      status: TransactionStatus.PENDING,
     });
     if (existing?.flutterwavePaymentLink) {
       this.logger.log(`Reusing pending transaction: ${existing._id}`);
       return {
         transaction: existing,
         paymentLink: existing.flutterwavePaymentLink,
-        txRef:       existing.flutterwaveReference!,
+        txRef: existing.flutterwaveReference!,
       };
     }
 
     // ── Build transaction ───────────────────────────────────────────────────
-    const txRef        = this.generateTransactionReference(TransactionType.BOOKING);
-    const amount       = booking.priceBreakdown.totalAmount;
-    const currency     = (booking.currency as Currency) ?? Currency.XAF;
+    const txRef = this.generateTransactionReference(TransactionType.BOOKING);
+    const amount = booking.priceBreakdown.totalAmount;
+    const currency = (booking.currency as Currency) ?? Currency.XAF;
     const propertyTitle = (booking.propertyId as any)?.title ?? 'Property Booking';
 
     const { platformFee, paymentProcessingFee, netAmount } = this.calculateFees(
@@ -169,27 +188,27 @@ export class PaymentsService {
     );
 
     const transaction = new this.transactionModel({
-      userId:               user._id,
-      bookingId:            new Types.ObjectId(bookingId),
+      userId: user._id,
+      bookingId: new Types.ObjectId(bookingId),
       amount,
       currency,
-      type:                 TransactionType.BOOKING,
-      status:               TransactionStatus.PENDING,
-      paymentMethod:        PaymentMethod.CARD,
+      type: TransactionType.BOOKING,
+      status: TransactionStatus.PENDING,
+      paymentMethod: PaymentMethod.CARD,
       flutterwaveReference: txRef,
-      description:          `Booking payment: ${propertyTitle} · ${booking.nights} night${booking.nights !== 1 ? 's' : ''}`,
+      description: `Booking payment: ${propertyTitle} · ${booking.nights} night${booking.nights !== 1 ? 's' : ''}`,
       platformFee,
       paymentProcessingFee,
       netAmount,
-      customerName:         user.name,
-      customerEmail:        user.email,
-      customerPhone:        (user as any).phoneNumber,
+      customerName: user.name,
+      customerEmail: user.email,
+      customerPhone: (user as any).phoneNumber,
       metadata: {
         bookingId,
         propertyTitle,
-        checkIn:  booking.checkIn.toISOString(),
+        checkIn: booking.checkIn.toISOString(),
         checkOut: booking.checkOut.toISOString(),
-        nights:   booking.nights,
+        nights: booking.nights,
       },
     });
 
@@ -199,27 +218,27 @@ export class PaymentsService {
     const frontendUrl = this.configService.get<string>('FRONTEND_URL');
 
     const flwPayload = {
-      tx_ref:        txRef,
+      tx_ref: txRef,
       amount,
       currency,
-      redirect_url:  `${frontendUrl}/dashboard/bookings/${bookingId}/payment-callback`,
+      redirect_url: `${frontendUrl}/dashboard/bookings/${bookingId}/payment-callback`,
       customer: {
-        email:       user.email       ?? '',
+        email: this.resolveCustomerEmail(user),
         phonenumber: (user as any).phoneNumber ?? '',
-        name:        user.name        ?? '',
+        name: user.name ?? '',
       },
       customizations: {
-        title:       'HoroHouse Stay Payment',
+        title: 'HoroHouse Stay Payment',
         description: `${propertyTitle} · ${booking.nights} night${booking.nights !== 1 ? 's' : ''}`,
-        logo:        this.configService.get('APP_LOGO_URL'),
+        logo: this.configService.get('APP_LOGO_URL'),
       },
       // All options — user chooses inside the modal (card, momo, bank)
       payment_options: 'card,mobilemoney,account,banktransfer',
       meta: {
         transactionId: transaction._id.toString(),
         bookingId,
-        userId:        (user._id as any).toString(),
-        type:          TransactionType.BOOKING,
+        userId: (user._id as any).toString(),
+        type: TransactionType.BOOKING,
       },
     };
 
@@ -227,9 +246,9 @@ export class PaymentsService {
     const paymentLink = flwResponse.data.link;
 
     // Persist link on transaction
-    transaction.flutterwavePaymentLink   = paymentLink;
+    transaction.flutterwavePaymentLink = paymentLink;
     transaction.flutterwaveTransactionId = flwResponse.data?.id?.toString();
-    transaction.paymentProviderResponse  = flwResponse;
+    transaction.paymentProviderResponse = flwResponse;
     await transaction.save();
 
     // Store txRef on booking so webhook can find it by reference
@@ -253,7 +272,7 @@ export class PaymentsService {
       this.logger.log(`Verifying payment: ${dto.transactionId}`);
 
       const transaction = await this.transactionModel.findOne({
-        _id:    dto.transactionId,
+        _id: dto.transactionId,
         userId: user._id,
       });
 
@@ -275,15 +294,15 @@ export class PaymentsService {
         verificationResponse.data.status === 'successful' &&
         verificationResponse.data.amount >= transaction.amount
       ) {
-        transaction.status               = TransactionStatus.SUCCESS;
-        transaction.completedAt          = new Date();
+        transaction.status = TransactionStatus.SUCCESS;
+        transaction.completedAt = new Date();
         transaction.flutterwaveTransactionId = verificationResponse.data.id.toString();
-        transaction.paymentProviderResponse  = verificationResponse;
+        transaction.paymentProviderResponse = verificationResponse;
         await transaction.save();
         await this.processSuccessfulPayment(transaction);
         this.logger.log(`Payment verified successfully: ${transaction._id}`);
       } else if (verificationResponse.data.status === 'failed') {
-        transaction.status        = TransactionStatus.FAILED;
+        transaction.status = TransactionStatus.FAILED;
         transaction.failureReason =
           verificationResponse.data.processor_response || 'Payment failed';
         await transaction.save();
@@ -328,10 +347,10 @@ export class PaymentsService {
               this.logger.log(`Duplicate webhook for already-successful tx: ${transaction._id}`);
               return;
             }
-            transaction.status               = TransactionStatus.SUCCESS;
-            transaction.completedAt          = new Date();
+            transaction.status = TransactionStatus.SUCCESS;
+            transaction.completedAt = new Date();
             transaction.flutterwaveTransactionId = data.id.toString();
-            transaction.paymentProviderResponse  = data;
+            transaction.paymentProviderResponse = data;
             // Update paymentMethod from actual webhook data
             transaction.paymentMethod = this.mapFlwPaymentType(data.payment_type);
             await transaction.save();
@@ -341,7 +360,7 @@ export class PaymentsService {
           break;
 
         case 'charge.failed':
-          transaction.status        = TransactionStatus.FAILED;
+          transaction.status = TransactionStatus.FAILED;
           transaction.failureReason = data.processor_response || 'Payment failed';
           transaction.paymentProviderResponse = data;
           await transaction.save();
@@ -365,8 +384,8 @@ export class PaymentsService {
     this.logger.log(`Finding transaction by reference: ${txRef}`);
     const transaction = await this.transactionModel
       .findOne({ flutterwaveReference: txRef, userId: new Types.ObjectId(userId) })
-      .populate('propertyId',    'title images address')
-      .populate('bookingId',     'checkIn checkOut nights priceBreakdown status')
+      .populate('propertyId', 'title images address')
+      .populate('bookingId', 'checkIn checkOut nights priceBreakdown status')
       .populate('subscriptionId')
       .populate('boostId')
       .exec();
@@ -379,16 +398,16 @@ export class PaymentsService {
     query: TransactionQueryDto,
   ): Promise<{ transactions: Transaction[]; total: number; page: number; totalPages: number }> {
     const { page = 1, limit = 20, status, type, paymentMethod, startDate, endDate } = query;
-    const skip   = (page - 1) * limit;
+    const skip = (page - 1) * limit;
     const filter: any = { userId: new Types.ObjectId(userId) };
 
-    if (status)        filter.status        = status;
-    if (type)          filter.type          = type;
+    if (status) filter.status = status;
+    if (type) filter.type = type;
     if (paymentMethod) filter.paymentMethod = paymentMethod;
     if (startDate || endDate) {
       filter.createdAt = {};
       if (startDate) filter.createdAt.$gte = new Date(startDate);
-      if (endDate)   filter.createdAt.$lte = new Date(endDate);
+      if (endDate) filter.createdAt.$lte = new Date(endDate);
     }
 
     const [transactions, total] = await Promise.all([
@@ -408,8 +427,8 @@ export class PaymentsService {
   async getTransactionById(transactionId: string, userId: string): Promise<Transaction> {
     const transaction = await this.transactionModel
       .findOne({ _id: transactionId, userId: new Types.ObjectId(userId) })
-      .populate('propertyId',    'title images address')
-      .populate('bookingId',     'checkIn checkOut nights priceBreakdown status paymentStatus')
+      .populate('propertyId', 'title images address')
+      .populate('bookingId', 'checkIn checkOut nights priceBreakdown status paymentStatus')
       .populate('subscriptionId')
       .populate('boostId')
       .exec();
@@ -464,17 +483,17 @@ export class PaymentsService {
     }
 
     const update: Partial<BookingDocument> = {
-      paymentStatus:    PaymentStatus.PAID,
+      paymentStatus: PaymentStatus.PAID,
       paymentReference: transaction.flutterwaveReference,
-      paymentMethod:    transaction.paymentMethod,
-      paidAt:           transaction.completedAt ?? new Date(),
+      paymentMethod: transaction.paymentMethod,
+      paidAt: transaction.completedAt ?? new Date(),
     };
 
     // Auto-confirm for instant-book properties
     const isInstantBookable = (booking.propertyId as any)?.isInstantBookable ?? false;
     if (isInstantBookable && booking.status === BookingStatus.PENDING) {
-      update.status        = BookingStatus.CONFIRMED;
-      update.confirmedAt   = new Date();
+      update.status = BookingStatus.CONFIRMED;
+      update.confirmedAt = new Date();
       update.isInstantBook = true;
       this.logger.log(`Auto-confirmed instant booking: ${booking._id}`);
     }
@@ -488,8 +507,8 @@ export class PaymentsService {
   }
 
   private generateTransactionReference(type: TransactionType): string {
-    const timestamp  = Date.now();
-    const random     = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 8).toUpperCase();
     const typePrefix = type.substring(0, 3).toUpperCase();
     return `HH-${typePrefix}-${timestamp}-${random}`;
   }
@@ -514,14 +533,14 @@ export class PaymentsService {
         paymentProcessingFee = 0;
     }
     const platformFee = 0;
-    const netAmount   = amount - platformFee - paymentProcessingFee;
+    const netAmount = amount - platformFee - paymentProcessingFee;
     return { platformFee, paymentProcessingFee, netAmount };
   }
 
   private getTransactionDescription(dto: InitializePaymentDto): string {
     switch (dto.type) {
-      case TransactionType.SUBSCRIPTION:  return `Subscription: ${dto.subscriptionPlan} (${dto.billingCycle})`;
-      case TransactionType.LISTING_FEE:   return 'Property Listing Fee';
+      case TransactionType.SUBSCRIPTION: return `Subscription: ${dto.subscriptionPlan} (${dto.billingCycle})`;
+      case TransactionType.LISTING_FEE: return 'Property Listing Fee';
       case TransactionType.BOOST_LISTING: return `Listing Boost: ${dto.boostType} (${dto.boostDuration}h)`;
       case TransactionType.DIGITAL_SERVICE: return dto.description || 'Digital Service';
       default: return 'HoroHouse Payment';
@@ -530,7 +549,7 @@ export class PaymentsService {
 
   private getPaymentOptions(paymentMethod: PaymentMethod): string {
     switch (paymentMethod) {
-      case PaymentMethod.CARD:          return 'card';
+      case PaymentMethod.CARD: return 'card';
       case PaymentMethod.BANK_TRANSFER: return 'account,banktransfer';
       case PaymentMethod.MTN_MOMO:
       case PaymentMethod.ORANGE_MONEY:
@@ -546,7 +565,7 @@ export class PaymentsService {
   private mapFlwPaymentType(paymentType: string): PaymentMethod {
     if (!paymentType) return PaymentMethod.CARD;
     const t = paymentType.toLowerCase();
-    if (t.includes('mtn'))    return PaymentMethod.MTN_MOMO;
+    if (t.includes('mtn')) return PaymentMethod.MTN_MOMO;
     if (t.includes('orange')) return PaymentMethod.ORANGE_MONEY;
     if (t.includes('mobile') || t.includes('momo')) return PaymentMethod.MTN_MOMO;
     if (t.includes('bank') || t.includes('transfer') || t.includes('account')) return PaymentMethod.BANK_TRANSFER;

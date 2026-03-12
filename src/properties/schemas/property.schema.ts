@@ -248,6 +248,20 @@ export class Property {
   serviceFee: number;
 
   /**
+   * Percentage discount applied when the guest books ≥7 nights.
+   * Host-configurable.  0–100 (default 10 = 10%).
+   */
+  @Prop({ default: 10, min: 0, max: 100 })
+  weeklyDiscountPercent: number;
+
+  /**
+   * Percentage discount applied when the guest books ≥28 nights.
+   * Host-configurable.  0–100 (default 15 = 15%).
+   */
+  @Prop({ default: 15, min: 0, max: 100 })
+  monthlyDiscountPercent: number;
+
+  /**
    * Date ranges blocked by the host (owner use, maintenance, etc.).
    * Bookings are rejected if they overlap any of these ranges.
    */

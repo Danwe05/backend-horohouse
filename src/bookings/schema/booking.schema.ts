@@ -6,31 +6,31 @@ export type BookingDocument = Booking & Document;
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 export enum BookingStatus {
-  PENDING   = 'pending',    // Guest requested, waiting for host confirmation
+  PENDING = 'pending',    // Guest requested, waiting for host confirmation
   CONFIRMED = 'confirmed',  // Host accepted (or instant-book triggered)
   CANCELLED = 'cancelled',  // Cancelled by guest or host
   COMPLETED = 'completed',  // Stay is over
-  REJECTED  = 'rejected',   // Host explicitly declined
-  NO_SHOW   = 'no_show',    // Guest never checked in
+  REJECTED = 'rejected',   // Host explicitly declined
+  NO_SHOW = 'no_show',    // Guest never checked in
 }
 
 export enum PaymentStatus {
-  UNPAID   = 'unpaid',
-  PAID     = 'paid',
+  UNPAID = 'unpaid',
+  PAID = 'paid',
   REFUNDED = 'refunded',
-  PARTIAL  = 'partial',     // Partial refund after cancellation
+  PARTIAL = 'partial',     // Partial refund after cancellation
 }
 
 export enum CancellationPolicy {
-  FLEXIBLE  = 'flexible',   // Full refund up to 24h before check-in
-  MODERATE  = 'moderate',   // Full refund up to 5 days before check-in
-  STRICT    = 'strict',     // 50% refund up to 7 days before check-in
+  FLEXIBLE = 'flexible',   // Full refund up to 24h before check-in
+  MODERATE = 'moderate',   // Full refund up to 5 days before check-in
+  STRICT = 'strict',     // 50% refund up to 7 days before check-in
   NO_REFUND = 'no_refund',
 }
 
 export enum CancelledBy {
   GUEST = 'guest',
-  HOST  = 'host',
+  HOST = 'host',
   ADMIN = 'admin',
   SYSTEM = 'system',        // Automatic cancellation (e.g. payment timeout)
 }
@@ -73,6 +73,13 @@ export class Booking {
   @Prop({ type: Types.ObjectId, ref: 'Property', required: true, index: true })
   propertyId: Types.ObjectId;
 
+  /**
+   * Optional — set when the property has multiple bookable rooms (hotel/hostel/motel).
+   * If present, availability checks are scoped to this room rather than the whole property.
+   */
+  @Prop({ type: Types.ObjectId, ref: 'Room', index: true })
+  roomId?: Types.ObjectId;
+
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
   guestId: Types.ObjectId;
 
@@ -97,9 +104,9 @@ export class Booking {
 
   @Prop({
     type: {
-      adults:   { type: Number, required: true, min: 1, default: 1 },
+      adults: { type: Number, required: true, min: 1, default: 1 },
       children: { type: Number, default: 0 },
-      infants:  { type: Number, default: 0 },
+      infants: { type: Number, default: 0 },
     },
     required: true,
   })
@@ -113,14 +120,14 @@ export class Booking {
    */
   @Prop({
     type: {
-      pricePerNight:  { type: Number, required: true },
-      nights:         { type: Number, required: true },
-      subtotal:       { type: Number, required: true },
-      cleaningFee:    { type: Number, default: 0 },
-      serviceFee:     { type: Number, default: 0 },
-      taxAmount:      { type: Number, default: 0 },
+      pricePerNight: { type: Number, required: true },
+      nights: { type: Number, required: true },
+      subtotal: { type: Number, required: true },
+      cleaningFee: { type: Number, default: 0 },
+      serviceFee: { type: Number, default: 0 },
+      taxAmount: { type: Number, default: 0 },
       discountAmount: { type: Number, default: 0 },
-      totalAmount:    { type: Number, required: true },
+      totalAmount: { type: Number, required: true },
     },
     required: true,
   })
@@ -179,11 +186,11 @@ export class Booking {
 
   @Prop({
     type: {
-      cancelledBy:   { type: String, enum: Object.values(CancelledBy) },
-      cancelledAt:   { type: Date },
-      reason:        { type: String },
-      refundAmount:  { type: Number },
-      refundStatus:  { type: String, enum: ['pending', 'processed', 'failed'] },
+      cancelledBy: { type: String, enum: Object.values(CancelledBy) },
+      cancelledAt: { type: Date },
+      reason: { type: String },
+      refundAmount: { type: Number },
+      refundStatus: { type: String, enum: ['pending', 'processed', 'failed'] },
     },
     default: null,
   })
@@ -216,10 +223,12 @@ export const BookingSchema = SchemaFactory.createForClass(Booking);
 
 // Fast lookups by property + date range (used in availability checks)
 BookingSchema.index({ propertyId: 1, checkIn: 1, checkOut: 1 });
+// Room-level availability checks
+BookingSchema.index({ roomId: 1, status: 1, checkIn: 1, checkOut: 1 });
 
 // Dashboard queries
 BookingSchema.index({ guestId: 1, status: 1, createdAt: -1 });
-BookingSchema.index({ hostId:  1, status: 1, createdAt: -1 });
+BookingSchema.index({ hostId: 1, status: 1, createdAt: -1 });
 
 // Automated jobs (e.g. auto-cancel unpaid after X hours)
 BookingSchema.index({ status: 1, paymentStatus: 1, createdAt: 1 });

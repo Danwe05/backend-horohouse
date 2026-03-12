@@ -199,6 +199,20 @@ export class CreatePropertyDto {
   @Min(0)
   serviceFee?: number;
 
+  @ApiPropertyOptional({ example: 10, description: 'Weekly discount % applied for stays ≥7 nights (0–100)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  weeklyDiscountPercent?: number;
+
+  @ApiPropertyOptional({ example: 15, description: 'Monthly discount % applied for stays ≥28 nights (0–100)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  monthlyDiscountPercent?: number;
+
   @ApiPropertyOptional({ type: ShortTermAmenitiesDto })
   @IsOptional()
   @IsObject()

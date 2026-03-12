@@ -32,6 +32,7 @@ import { AppointmentsModule } from './appointments/appointments.module';
 import { SystemSettingsModule } from './system-settings/system-settings.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { ReportsModule } from './reports/reports.module';
+import { RoomsModule } from './rooms/rooms.module';
 
 @Module({
   imports: [
@@ -85,7 +86,8 @@ import { ReportsModule } from './reports/reports.module';
     AppointmentsModule,
     SystemSettingsModule,
     BookingsModule,
-    ReportsModule
+    ReportsModule,
+    RoomsModule,
   ],
 
   // ✅ ADD THESE — without them AppController is never registered

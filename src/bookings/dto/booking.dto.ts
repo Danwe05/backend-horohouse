@@ -75,6 +75,15 @@ export class CreateBookingDto {
   @IsString()
   @Length(0, 1000)
   guestNote?: string;
+
+  @ApiPropertyOptional({
+    example: '507f1f77bcf86cd799439022',
+    description: 'Specific room ID — required for hotels, hostels, motels with multiple rooms',
+  })
+  @IsOptional()
+  @IsString()
+  @Length(24, 24, { message: 'roomId must be a valid 24-character ObjectId' })
+  roomId?: string;
 }
 
 // ─── Cancel Booking ───────────────────────────────────────────────────────────
@@ -182,4 +191,13 @@ export class AvailabilityQueryDto {
   @ApiProperty({ example: '2026-04-30', description: 'End of range to check' })
   @IsDateString()
   to: string;
+
+  @ApiPropertyOptional({
+    example: '507f1f77bcf86cd799439022',
+    description: 'Optional room ID — returns room-specific availability instead of property-wide',
+  })
+  @IsOptional()
+  @IsString()
+  @Length(24, 24)
+  roomId?: string;
 }
