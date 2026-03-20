@@ -62,65 +62,73 @@ export class GetViewedPropertiesDto {
 
 // User Preferences DTO
 export class UserPreferencesDto {
-  @ApiPropertyOptional({
-    example: 100000,
-    description: 'Minimum price in currency units'
-  })
+  @ApiPropertyOptional({ example: 100000, description: 'Minimum price in currency units' })
   @IsOptional()
   @IsNumber()
   @Min(0)
   minPrice?: number;
 
-  @ApiPropertyOptional({
-    example: 500000,
-    description: 'Maximum price in currency units'
-  })
+  @ApiPropertyOptional({ example: 500000, description: 'Maximum price in currency units' })
   @IsOptional()
   @IsNumber()
   @Min(0)
   maxPrice?: number;
 
-  @ApiPropertyOptional({
-    example: ['apartment', 'house', 'condo'],
-    description: 'Preferred property types'
-  })
+  @ApiPropertyOptional({ example: 'XAF', description: 'Preferred currency code' })
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
+  @ApiPropertyOptional({ example: ['Apartment', 'House'], description: 'Preferred property types' })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   propertyTypes?: string[];
 
-  @ApiPropertyOptional({
-    example: ['Douala', 'Yaoundé'],
-    description: 'Preferred cities'
-  })
+  @ApiPropertyOptional({ example: ['Douala', 'Yaoundé'], description: 'Preferred cities / areas' })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   cities?: string[];
 
-  @ApiPropertyOptional({
-    example: ['parking', 'gym', 'pool'],
-    description: 'Preferred amenities'
-  })
+  @ApiPropertyOptional({ example: ['Parking', 'Gym'], description: 'Preferred features / amenities' })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   amenities?: string[];
 
-  @ApiPropertyOptional({
-    example: 10,
-    description: 'Maximum radius in kilometers'
-  })
+  @ApiPropertyOptional({ example: [2, 3], description: 'Preferred number of bedrooms (multi-select)' })
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  bedrooms?: number[];
+
+  @ApiPropertyOptional({ example: [1, 2], description: 'Preferred number of bathrooms (multi-select)' })
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  bathrooms?: number[];
+
+  @ApiPropertyOptional({ example: 10, description: 'Maximum search radius in kilometres' })
   @IsOptional()
   @IsNumber()
   @Min(1)
   @Max(100)
   maxRadius?: number;
 
-  @ApiPropertyOptional({
-    type: LocationDto,
-    description: 'Preferred location coordinates'
-  })
+  @ApiPropertyOptional({ example: 50, description: 'Minimum area in m²' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  minArea?: number;
+
+  @ApiPropertyOptional({ example: 5000, description: 'Maximum area in m²' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxArea?: number;
+
+  @ApiPropertyOptional({ type: LocationDto, description: 'Preferred location coordinates' })
   @IsOptional()
   @ValidateNested()
   @Type(() => LocationDto)

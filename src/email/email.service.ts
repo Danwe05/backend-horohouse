@@ -847,6 +847,125 @@ export class EmailService {
   </table>
 </div>`;
   }
+
+  async sendBookingConfirmationEmail(
+    recipientEmail: string,
+    recipientName: string,
+    params: {
+      propertyTitle: string;
+      checkIn: string;
+      checkOut: string;
+      nights: number;
+      totalAmount: number;
+      currency: string;
+      bookingId: string;
+    }
+  ): Promise<void> {
+    const brandName = this.configService.get<string>('BRAND_NAME', 'HoroHouse');
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
+
+    await this.safeSendMail({
+      to: recipientEmail,
+      subject: `Booking confirmed — ${params.propertyTitle}`,
+      html: `
+      <div style="font-family:Arial,sans-serif;background:#f6f9fc;padding:24px;">
+        <table style="max-width:640px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;">
+          <tr><td style="padding:24px;background:#0f172a;color:#fff;"><h1 style="margin:0;font-size:20px;">${brandName}</h1></td></tr>
+          <tr><td style="padding:24px;">
+            <h2 style="color:#10b981;">Your booking is confirmed! 🎉</h2>
+            <p>Hi ${recipientName},</p>
+            <p>Your stay at <strong>${params.propertyTitle}</strong> is confirmed.</p>
+            <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+              <tr style="background:#f8fafc;"><td style="padding:10px;font-size:14px;">Check-in</td><td style="padding:10px;font-weight:600;">${params.checkIn}</td></tr>
+              <tr><td style="padding:10px;font-size:14px;">Check-out</td><td style="padding:10px;font-weight:600;">${params.checkOut}</td></tr>
+              <tr style="background:#f8fafc;"><td style="padding:10px;font-size:14px;">Nights</td><td style="padding:10px;font-weight:600;">${params.nights}</td></tr>
+              <tr><td style="padding:10px;font-size:14px;">Total paid</td><td style="padding:10px;font-weight:600;color:#10b981;">${params.currency} ${params.totalAmount.toLocaleString()}</td></tr>
+            </table>
+            <a href="${frontendUrl}/bookings/${params.bookingId}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;">View Booking</a>
+            <p style="margin-top:24px;">— The ${brandName} Team</p>
+          </td></tr>
+        </table>
+      </div>`,
+      text: `Booking confirmed for ${params.propertyTitle}. Check-in: ${params.checkIn}, Check-out: ${params.checkOut}. Total: ${params.currency} ${params.totalAmount}.`,
+    });
+  }
+
+  async sendPaymentRequestEmail(
+    recipientEmail: string,
+    recipientName: string,
+    params: {
+      propertyTitle: string;
+      checkIn: string;
+      checkOut: string;
+      totalAmount: number;
+      currency: string;
+      paymentLink: string;
+      expiresInHours: number;
+    }
+  ): Promise<void> {
+    const brandName = this.configService.get<string>('BRAND_NAME', 'HoroHouse');
+
+    await this.safeSendMail({
+      to: recipientEmail,
+      subject: `Complete your payment — ${params.propertyTitle}`,
+      html: `
+      <div style="font-family:Arial,sans-serif;background:#f6f9fc;padding:24px;">
+        <table style="max-width:640px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;">
+          <tr><td style="padding:24px;background:#0f172a;color:#fff;"><h1 style="margin:0;font-size:20px;">${brandName}</h1></td></tr>
+          <tr><td style="padding:24px;">
+            <h2>Complete your booking payment</h2>
+            <p>Hi ${recipientName},</p>
+            <p>Your booking request for <strong>${params.propertyTitle}</strong> (${params.checkIn} → ${params.checkOut}) is pending payment.</p>
+            <p style="font-size:22px;font-weight:700;color:#0f172a;">${params.currency} ${params.totalAmount.toLocaleString()}</p>
+            <p style="color:#ef4444;font-size:14px;">⏱ This link expires in ${params.expiresInHours} hours.</p>
+            <a href="${params.paymentLink}" style="display:inline-block;background:#10b981;color:#fff;text-decoration:none;padding:14px 28px;border-radius:6px;font-weight:700;">Pay Now</a>
+            <p style="margin-top:24px;font-size:13px;color:#64748b;">If you did not make this booking, ignore this email.</p>
+          </td></tr>
+        </table>
+      </div>`,
+      text: `Complete your payment of ${params.currency} ${params.totalAmount} for ${params.propertyTitle}. Pay here: ${params.paymentLink}`,
+    });
+  }
+
+  async sendHostNewBookingEmail(
+    recipientEmail: string,
+    recipientName: string,
+    params: {
+      propertyTitle: string;
+      guestName: string;
+      checkIn: string;
+      checkOut: string;
+      totalAmount: number;
+      currency: string;
+      bookingId: string;
+    }
+  ): Promise<void> {
+    const brandName = this.configService.get<string>('BRAND_NAME', 'HoroHouse');
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
+
+    await this.safeSendMail({
+      to: recipientEmail,
+      subject: `New booking request — ${params.propertyTitle}`,
+      html: `
+      <div style="font-family:Arial,sans-serif;background:#f6f9fc;padding:24px;">
+        <table style="max-width:640px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;">
+          <tr><td style="padding:24px;background:#0f172a;color:#fff;"><h1 style="margin:0;font-size:20px;">${brandName}</h1></td></tr>
+          <tr><td style="padding:24px;">
+            <h2>New booking request</h2>
+            <p>Hi ${recipientName},</p>
+            <p><strong>${params.guestName}</strong> has requested to book <strong>${params.propertyTitle}</strong>.</p>
+            <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+              <tr style="background:#f8fafc;"><td style="padding:10px;font-size:14px;">Check-in</td><td style="padding:10px;font-weight:600;">${params.checkIn}</td></tr>
+              <tr><td style="padding:10px;font-size:14px;">Check-out</td><td style="padding:10px;font-weight:600;">${params.checkOut}</td></tr>
+              <tr style="background:#f8fafc;"><td style="padding:10px;font-size:14px;">Amount</td><td style="padding:10px;font-weight:600;color:#10b981;">${params.currency} ${params.totalAmount.toLocaleString()}</td></tr>
+            </table>
+            <a href="${frontendUrl}/hosting/bookings/${params.bookingId}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;">Review Request</a>
+          </td></tr>
+        </table>
+      </div>`,
+      text: `${params.guestName} requested to book ${params.propertyTitle} from ${params.checkIn} to ${params.checkOut}.`,
+    });
+  }
 }
 
 

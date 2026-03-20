@@ -11,7 +11,7 @@ import { ReviewsModule } from 'src/reviews/reviews.module';
   imports: [
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
-      { name: Property.name, schema: PropertySchema }, // Add Property model
+      { name: Property.name, schema: PropertySchema }, 
     ]),
     ConfigModule,
     ReviewsModule

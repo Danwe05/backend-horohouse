@@ -13,6 +13,7 @@ import { Booking, BookingDocument, BookingStatus, PaymentStatus, CancelledBy } f
 import { Property, PropertyDocument, PropertyStatus, ApprovalStatus } from '../properties/schemas/property.schema';
 import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
 import { RoomsService } from '../rooms/rooms.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   CreateBookingDto,
   CancelBookingDto,
@@ -55,6 +56,7 @@ export class BookingsService {
     @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private readonly roomsService: RoomsService,
+    private readonly notificationsService: NotificationsService,
   ) { }
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -202,6 +204,35 @@ export class BookingsService {
 
     const saved = await booking.save();
 
+    const fmt = (d: Date) => d.toISOString().split('T')[0];
+    const propertyTitle = (property as any).title ?? 'your property';
+    const hostIdStr = hostId.toString();
+    const guestIdStr = guest._id.toString();
+
+    if (isInstantBook) {
+      // Guest gets immediate confirmation
+      await this.notificationsService.notifyBookingConfirmed(guestIdStr, {
+        bookingId: saved._id.toString(),
+        propertyId: dto.propertyId,
+        propertyTitle,
+        hostName: (property.ownerId as any)?.name ?? 'Host',
+        checkIn: fmt(checkIn),
+        checkOut: fmt(checkOut),
+      });
+    } else {
+      // Host gets a booking request to review
+      await this.notificationsService.notifyBookingRequest(hostIdStr, {
+        bookingId: saved._id.toString(),
+        propertyId: dto.propertyId,
+        propertyTitle,
+        guestName: guest.name,
+        checkIn: fmt(checkIn),
+        checkOut: fmt(checkOut),
+      });
+    }
+
+    return saved;
+
     this.logger.log(
       `Booking created: ${saved._id} | property: ${dto.propertyId} | ` +
       `guest: ${guest._id} | status: ${initialStatus}`,
@@ -311,6 +342,18 @@ export class BookingsService {
       )
       .exec();
 
+    const property = await this.propertyModel.findById(booking.propertyId).select('title').lean();
+    const fmt = (d: Date) => d.toISOString().split('T')[0];
+
+    await this.notificationsService.notifyBookingConfirmed(booking.guestId.toString(), {
+      bookingId: bookingId,
+      propertyId: booking.propertyId.toString(),
+      propertyTitle: (property as any)?.title ?? 'your property',
+      hostName: host.name,
+      checkIn: fmt(booking.checkIn),
+      checkOut: fmt(booking.checkOut),
+    });
+
     this.logger.log(`Booking ${bookingId} confirmed by host ${host._id}`);
     return updated!;
   }
@@ -342,6 +385,17 @@ export class BookingsService {
         { new: true },
       )
       .exec();
+    const property = await this.propertyModel.findById(booking.propertyId).select('title').lean();
+    const fmt = (d: Date) => d.toISOString().split('T')[0];
+
+    await this.notificationsService.notifyBookingRejected(booking.guestId.toString(), {
+      bookingId: bookingId,
+      propertyId: booking.propertyId.toString(),
+      propertyTitle: (property as any)?.title ?? 'your property',
+      hostName: host.name,
+      checkIn: fmt(booking.checkIn),
+      checkOut: fmt(booking.checkOut),
+    });
 
     this.logger.log(`Booking ${bookingId} rejected by host ${host._id}`);
     return updated!;

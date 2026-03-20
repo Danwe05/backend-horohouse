@@ -421,6 +421,18 @@ export class PropertiesController {
     return this.propertiesService.unblockDates(id, dto, req.user);
   }
 
+  @Post('tour/track')
+  @Public()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Track a virtual tour view (fire-and-forget)' })
+  @ApiResponse({ status: 204, description: 'Tracked' })
+  async trackTourView(@Body() body: { propertyId: string }): Promise<void> {
+    if (body?.propertyId) {
+      // Intentionally not awaited — never block the response
+      this.propertiesService.trackTourView(body.propertyId).catch(() => { });
+    }
+  }
+
   @Get(':id')
   @Public()
   @ApiOperation({ summary: 'Get property by ID' })

@@ -1224,7 +1224,8 @@ export class UsersService {
   }
 
   /**
-   * Update onboarding preferences for a user
+   * Update onboarding preferences for a user.
+   * Maps from the onboarding schema field names into the User preferences schema field names.
    */
   async updateOnboardingPreferences(userId: string, preferences: {
     propertyPreferences?: any;
@@ -1237,12 +1238,31 @@ export class UsersService {
 
     const updateData: any = {};
 
+    // ── Map propertyPreferences (onboarding schema) → preferences (User schema) ──
+    // Onboarding uses: propertyType[], location[], features[], budget{min,max,currency}
+    // User schema uses: propertyTypes[], cities[], amenities[], minPrice, maxPrice, currency
     if (preferences.propertyPreferences) {
-      updateData.propertyPreferences = preferences.propertyPreferences;
+      const pp = preferences.propertyPreferences;
+
+      if (pp.propertyType?.length) updateData['preferences.propertyTypes'] = pp.propertyType;
+      if (pp.location?.length) updateData['preferences.cities'] = pp.location;
+      if (pp.features?.length) updateData['preferences.amenities'] = pp.features;
+      if (pp.bedrooms?.length) updateData['preferences.bedrooms'] = pp.bedrooms;
+      if (pp.bathrooms?.length) updateData['preferences.bathrooms'] = pp.bathrooms;
+      if (pp.budget) {
+        if (pp.budget.min !== undefined) updateData['preferences.minPrice'] = pp.budget.min;
+        if (pp.budget.max !== undefined) updateData['preferences.maxPrice'] = pp.budget.max;
+        if (pp.budget.currency) updateData['preferences.currency'] = pp.budget.currency;
+      }
     }
 
+    // ── Store agentPreferences on the new agentPreferences User field ──
+    // Also mirror flat fields (licenseNumber, agency) for backward compatibility
     if (preferences.agentPreferences) {
-      updateData.agentPreferences = preferences.agentPreferences;
+      const ap = preferences.agentPreferences;
+      updateData.agentPreferences = ap;
+      if (ap.licenseNumber) updateData.licenseNumber = ap.licenseNumber;
+      if (ap.agency) updateData.agency = ap.agency;
     }
 
     if (preferences.onboardingCompleted !== undefined) {

@@ -323,6 +323,20 @@ export class CreatePropertyDto {
   @IsString()
   videoUrl?: string;
 
+  @ApiPropertyOptional({
+    enum: ['kuula', 'youtube', 'images', 'none'],
+    description: 'Which tour renderer to use',
+  })
+  @IsOptional()
+  @IsEnum(['kuula', 'youtube', 'images', 'none'])
+  tourType?: string;
+
+  @ApiPropertyOptional({ description: 'Cloudinary URL for tour preview thumbnail' })
+  @IsOptional()
+  @IsString()
+  tourThumbnail?: string;
+
+
   @ApiPropertyOptional({ enum: PropertyStatus })
   @IsOptional()
   @IsEnum(PropertyStatus)

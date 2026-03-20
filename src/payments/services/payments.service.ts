@@ -16,7 +16,8 @@ import {
   BookingStatus, PaymentStatus,
 } from '../../bookings/schema/booking.schema';
 import { InitializePaymentDto, VerifyPaymentDto, TransactionQueryDto } from '../dto/payment.dto';
-import { User } from '../../users/schemas/user.schema';
+import { NotificationsService } from '../../notifications/notifications.service';
+import { User, UserDocument } from '../../users/schemas/user.schema';
 
 @Injectable()
 export class PaymentsService {
@@ -24,7 +25,9 @@ export class PaymentsService {
 
   constructor(
     @InjectModel(Transaction.name) private transactionModel: Model<TransactionDocument>,
-    @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,  // ← ADDED
+    @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    private readonly notificationsService: NotificationsService,
     private flutterwaveService: FlutterwaveService,
     private configService: ConfigService,
   ) { }
@@ -504,6 +507,18 @@ export class PaymentsService {
       `Booking payment confirmed | booking: ${booking._id} | ` +
       `txRef: ${transaction.flutterwaveReference} | autoConfirmed: ${isInstantBookable}`,
     );
+
+    // Notify host that payment came in
+    const guest = await this.userModel.findById(booking.guestId).select('name').lean();
+    const property = (booking.propertyId as any);
+
+    await this.notificationsService.notifyPaymentReceived(booking.hostId.toString(), {
+      bookingId: booking._id.toString(),
+      propertyTitle: property?.title ?? 'your property',
+      guestName: (guest as any)?.name ?? 'A guest',
+      amount: booking.priceBreakdown.totalAmount,
+      currency: booking.currency ?? 'XAF',
+    });
   }
 
   private generateTransactionReference(type: TransactionType): string {

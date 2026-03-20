@@ -6,7 +6,6 @@ export type PropertyDocument = Property & Document;
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 export enum PropertyType {
-  // Residential
   APARTMENT = 'apartment',
   HOUSE = 'house',
   VILLA = 'villa',
@@ -15,12 +14,10 @@ export enum PropertyType {
   BUNGALOW = 'bungalow',
   PENTHOUSE = 'penthouse',
   LAND = 'land',
-  // Commercial
   COMMERCIAL = 'commercial',
   OFFICE = 'office',
   SHOP = 'shop',
   WAREHOUSE = 'warehouse',
-  // ── Short-term / hospitality 
   HOTEL = 'hotel',
   MOTEL = 'motel',
   VACATION_RENTAL = 'vacation_rental',
@@ -47,7 +44,7 @@ export enum ApprovalStatus {
 export enum ListingType {
   SALE = 'sale',
   RENT = 'rent',
-  SHORT_TERM = 'short_term', // NEW — nightly / weekly pricing
+  SHORT_TERM = 'short_term',
 }
 
 export enum PricingUnit {
@@ -57,10 +54,54 @@ export enum PricingUnit {
 }
 
 export enum CancellationPolicy {
-  FLEXIBLE = 'flexible',   // Full refund up to 24h before check-in
-  MODERATE = 'moderate',   // Full refund up to 5 days before check-in
-  STRICT = 'strict',     // 50% refund up to 7 days before check-in
+  FLEXIBLE = 'flexible',
+  MODERATE = 'moderate',
+  STRICT = 'strict',
   NO_REFUND = 'no_refund',
+}
+
+// ─── Student-specific enums (NEW) ────────────────────────────────────────────
+
+export enum WaterSource {
+  /** CAMWATER — municipal supply (unreliable in many areas) */
+  CAMWATER = 'camwater',
+  /** Private borehole on the compound */
+  BOREHOLE = 'borehole',
+  /** Open well */
+  WELL = 'well',
+  /** Delivery by tanker truck */
+  TANKER = 'tanker',
+  /** Both CAMWATER and a borehole backup */
+  CAMWATER_AND_BOREHOLE = 'camwater_and_borehole',
+}
+
+export enum ElectricityBackup {
+  /** No backup — fully dependent on ENEO grid */
+  NONE = 'none',
+  /** Solar panels on site */
+  SOLAR = 'solar',
+  /** Shared or private generator */
+  GENERATOR = 'generator',
+  /** Both solar and generator */
+  SOLAR_AND_GENERATOR = 'solar_and_generator',
+}
+
+export enum FurnishingStatus {
+  /** Empty — student brings everything */
+  UNFURNISHED = 'unfurnished',
+  /** Bed frame and wardrobe only */
+  SEMI_FURNISHED = 'semi_furnished',
+  /** Bed, wardrobe, desk, basic appliances */
+  FURNISHED = 'furnished',
+}
+
+export enum GenderRestriction {
+  /** Any gender */
+  NONE = 'none',
+  /** Women-only compound */
+  WOMEN_ONLY = 'women_only',
+  /** Men-only compound */
+  MEN_ONLY = 'men_only',
 }
 
 // ─── Sub-document interfaces ──────────────────────────────────────────────────
@@ -81,37 +122,86 @@ export interface PropertyAmenities {
   furnished?: boolean;
 }
 
-/**
- * Amenities specific to short-term / hospitality listings.
- * Kept separate from PropertyAmenities so long-term listings stay clean.
- */
 export interface ShortTermAmenities {
-  // Essentials
   hasWifi?: boolean;
-  hasBreakfast?: boolean;      // breakfast included in price
+  hasBreakfast?: boolean;
   hasParking?: boolean;
   hasTv?: boolean;
-  hasKitchen?: boolean;        // full kitchen available
-  hasKitchenette?: boolean;    // small kitchenette only
+  hasKitchen?: boolean;
+  hasKitchenette?: boolean;
   hasWasher?: boolean;
   hasDryer?: boolean;
   hasAirConditioning?: boolean;
   hasHeating?: boolean;
-  // Guest policies
   petsAllowed?: boolean;
   smokingAllowed?: boolean;
   partiesAllowed?: boolean;
-  maxGuests?: number;          // hard cap enforced at booking time
-  // Check-in details
-  checkInTime?: string;        // "14:00"
-  checkOutTime?: string;       // "11:00"
-  selfCheckIn?: boolean;       // keypad / lockbox
-  // Accessibility
+  maxGuests?: number;
+  checkInTime?: string;
+  checkOutTime?: string;
+  selfCheckIn?: boolean;
   wheelchairAccessible?: boolean;
-  // Extra services
   airportTransfer?: boolean;
   conciergeService?: boolean;
   dailyHousekeeping?: boolean;
+}
+
+/**
+ * Student-specific property details (NEW).
+ * Only populated when isStudentFriendly === true.
+ * All fields are optional so existing properties are never affected.
+ */
+export interface StudentDetails {
+  // ── Location intelligence ─────────────────────────────────────────────────
+  /** Straight-line distance in metres from property to nearest campus gate */
+  campusProximityMeters?: number;
+  /** Name of the nearest university or campus */
+  nearestCampus?: string;
+  /** Estimated walking time in minutes */
+  walkingMinutes?: number;
+  /** Estimated taxi/moto time in minutes */
+  taxiMinutes?: number;
+
+  // ── Infrastructure (critical for Cameroon) ────────────────────────────────
+  waterSource?: WaterSource;
+  electricityBackup?: ElectricityBackup;
+  furnishingStatus?: FurnishingStatus;
+
+  // ── House rules ───────────────────────────────────────────────────────────
+  genderRestriction?: GenderRestriction;
+  /** Time the gate locks at night, e.g. "22:00" */
+  curfewTime?: string;
+  /** Whether visitors are allowed on the compound */
+  visitorsAllowed?: boolean;
+  /** Whether cooking is allowed in the room */
+  cookingAllowed?: boolean;
+
+  // ── Security ──────────────────────────────────────────────────────────────
+  hasGatedCompound?: boolean;
+  hasNightWatchman?: boolean;
+  hasFence?: boolean;
+
+  // ── Landlord student-friendliness ─────────────────────────────────────────
+  /**
+   * Awarded by HoroHouse after the landlord passes the Student-Approved program.
+   * Boosts listing rank in student search results.
+   */
+  isStudentApproved?: boolean;
+  /**
+   * Maximum advance months the landlord accepts.
+   * The legal maximum is 12 in Cameroon; student-friendly landlords use 3–6.
+   */
+  maxAdvanceMonths?: number;
+  /** Whether the landlord accepts the HoroHouse rent-advance microfinance scheme */
+  acceptsRentAdvanceScheme?: boolean;
+
+  // ── Colocation ────────────────────────────────────────────────────────────
+  /** Number of beds available for colocation */
+  availableBeds?: number;
+  /** Total beds in the unit (e.g. 2-bed shared flat) */
+  totalBeds?: number;
+  /** Price per person per month when split by the number of beds */
+  pricePerPersonMonthly?: number;
 }
 
 export interface PropertyImages {
@@ -127,11 +217,10 @@ export interface PropertyMediaItem {
   caption?: string;
 }
 
-/** A date range blocked by the host (no bookings accepted). */
 export interface UnavailableDateRange {
   from: Date;
   to: Date;
-  reason?: string;   // 'owner_use' | 'maintenance' | custom string
+  reason?: string;
 }
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -140,13 +229,13 @@ export interface UnavailableDateRange {
 export class Property {
   _id!: Types.ObjectId;
 
-  // ── Core ─────────────────────────────────────────────────────────────────
+  // ── Core ──────────────────────────────────────────────────────────────────
 
   @Prop({ required: true, trim: true })
   title: string;
 
   @Prop({ required: true })
-  price: number;  // base price — interpreted per pricingUnit for short-term
+  price: number;
 
   @Prop({ default: 'XAF' })
   currency?: string;
@@ -160,7 +249,7 @@ export class Property {
   @Prop({ required: true })
   description: string;
 
-  // ── Location ─────────────────────────────────────────────────────────────
+  // ── Location ──────────────────────────────────────────────────────────────
 
   @Prop({ required: true })
   city: string;
@@ -212,12 +301,8 @@ export class Property {
   @Prop({ type: Object, default: {} })
   amenities: PropertyAmenities;
 
-  // ── Short-term specific fields (NEW) ──────────────────────────────────────
+  // ── Short-term specific fields ────────────────────────────────────────────
 
-  /**
-   * Only relevant when listingType === 'short_term'.
-   * Determines how `price` is interpreted.
-   */
   @Prop({
     type: String,
     enum: Object.values(PricingUnit),
@@ -225,46 +310,24 @@ export class Property {
   })
   pricingUnit: PricingUnit;
 
-  /** Minimum number of nights per booking (e.g. 2). Default: 1. */
   @Prop({ default: 1, min: 1 })
   minNights: number;
 
-  /** Maximum number of nights per booking (e.g. 30). Default: 365. */
   @Prop({ default: 365, min: 1 })
   maxNights: number;
 
-  /**
-   * One-time cleaning fee added on top of nightly price.
-   * Stored separately so guests see the price breakdown clearly.
-   */
   @Prop({ default: 0, min: 0 })
   cleaningFee: number;
 
-  /**
-   * Additional per-booking service fee (platform or host fee).
-   * The BookingsService also applies a platform percentage on top of this.
-   */
   @Prop({ default: 0, min: 0 })
   serviceFee: number;
 
-  /**
-   * Percentage discount applied when the guest books ≥7 nights.
-   * Host-configurable.  0–100 (default 10 = 10%).
-   */
   @Prop({ default: 10, min: 0, max: 100 })
   weeklyDiscountPercent: number;
 
-  /**
-   * Percentage discount applied when the guest books ≥28 nights.
-   * Host-configurable.  0–100 (default 15 = 15%).
-   */
   @Prop({ default: 15, min: 0, max: 100 })
   monthlyDiscountPercent: number;
 
-  /**
-   * Date ranges blocked by the host (owner use, maintenance, etc.).
-   * Bookings are rejected if they overlap any of these ranges.
-   */
   @Prop({
     type: [
       {
@@ -277,24 +340,12 @@ export class Property {
   })
   unavailableDates: UnavailableDateRange[];
 
-  /**
-   * Amenities relevant only to short-term / hospitality listings
-   * (wifi, breakfast, check-in time, max guests, pet policy, etc.).
-   */
   @Prop({ type: Object, default: {} })
   shortTermAmenities: ShortTermAmenities;
 
-  /**
-   * If true, bookings are automatically confirmed without host approval.
-   * Equivalent to Airbnb "Instant Book".
-   */
   @Prop({ default: false })
   isInstantBookable: boolean;
 
-  /**
-   * Governs how much of the booking total is refunded on cancellation
-   * and how far in advance the guest must cancel.
-   */
   @Prop({
     type: String,
     enum: Object.values(CancellationPolicy),
@@ -302,18 +353,56 @@ export class Property {
   })
   cancellationPolicy: CancellationPolicy;
 
-  /**
-   * Optional advance notice required before a guest can check in.
-   * 0 = same-day bookings allowed.
-   */
   @Prop({ default: 0, min: 0 })
   advanceNoticeDays: number;
 
-  /**
-   * How far in advance guests can book (e.g. 365 = up to 1 year ahead).
-   */
   @Prop({ default: 365, min: 1 })
   bookingWindowDays: number;
+
+  // ── Student-specific fields (NEW) ─────────────────────────────────────────
+
+  /**
+   * Master switch. Set to true when a landlord opts into the student housing
+   * programme. Activates student filters in search and enables studentDetails.
+   * Defaults to false — zero impact on existing listings.
+   */
+  @Prop({ default: false, index: true })
+  isStudentFriendly: boolean;
+
+  /**
+   * Populated only when isStudentFriendly === true.
+   * All fields are optional so partial data is acceptable during onboarding.
+   */
+  @Prop({
+    type: {
+      campusProximityMeters: { type: Number },
+      nearestCampus: { type: String },
+      walkingMinutes: { type: Number },
+      taxiMinutes: { type: Number },
+      waterSource: { type: String, enum: Object.values(WaterSource) },
+      electricityBackup: { type: String, enum: Object.values(ElectricityBackup) },
+      furnishingStatus: { type: String, enum: Object.values(FurnishingStatus) },
+      genderRestriction: {
+        type: String,
+        enum: Object.values(GenderRestriction),
+        default: GenderRestriction.NONE,
+      },
+      curfewTime: { type: String },
+      visitorsAllowed: { type: Boolean },
+      cookingAllowed: { type: Boolean },
+      hasGatedCompound: { type: Boolean },
+      hasNightWatchman: { type: Boolean },
+      hasFence: { type: Boolean },
+      isStudentApproved: { type: Boolean, default: false },
+      maxAdvanceMonths: { type: Number },
+      acceptsRentAdvanceScheme: { type: Boolean, default: false },
+      availableBeds: { type: Number },
+      totalBeds: { type: Number },
+      pricePerPersonMonthly: { type: Number },
+    },
+    default: null,
+  })
+  studentDetails?: StudentDetails;
 
   // ── Owner / agent ─────────────────────────────────────────────────────────
 
@@ -412,7 +501,7 @@ export class Property {
   @Prop({ default: 0 })
   reviewCount?: number;
 
-  // ── Virtual tour ─────────────────────────────────────────────────────────
+  // ── Virtual tour ──────────────────────────────────────────────────────────
 
   @Prop()
   virtualTourUrl?: string;
@@ -420,7 +509,20 @@ export class Property {
   @Prop()
   videoUrl?: string;
 
-  // ── Timestamps ───────────────────────────────────────────────────────────
+  @Prop({
+    type: String,
+    enum: ['kuula', 'youtube', 'images', 'none'],
+    default: 'none',
+  })
+  tourType?: string;
+
+  @Prop({ default: null })
+  tourThumbnail?: string;     // Cloudinary URL used as the preview thumbnail
+
+  @Prop({ default: 0 })
+  tourViews: number;          // lightweight analytics counter
+
+  // ── Timestamps ────────────────────────────────────────────────────────────
 
   createdAt: Date;
   updatedAt: Date;
@@ -443,7 +545,7 @@ PropertySchema.index({
   keywords: 'text',
 });
 
-// Common filter combinations
+// Common filter combinations (existing)
 PropertySchema.index({ city: 1, type: 1, listingType: 1 });
 PropertySchema.index({ price: 1, city: 1 });
 PropertySchema.index({ availability: 1, isActive: 1 });
@@ -451,8 +553,23 @@ PropertySchema.index({ ownerId: 1, createdAt: -1 });
 PropertySchema.index({ viewsCount: -1 });
 PropertySchema.index({ createdAt: -1 });
 
-// NEW — short-term specific queries
+// Short-term specific (existing)
 PropertySchema.index({ listingType: 1, isInstantBookable: 1, isActive: 1 });
 PropertySchema.index({ listingType: 1, cancellationPolicy: 1 });
-// Blocked-dates range queries (used by availability endpoint)
 PropertySchema.index({ 'unavailableDates.from': 1, 'unavailableDates.to': 1 });
+
+// Student-specific indexes (NEW)
+// Powers the main student housing search — city + student flag + approval status
+PropertySchema.index({ isStudentFriendly: 1, city: 1, isActive: 1, approvalStatus: 1 });
+// Sort by campus proximity in student search results
+PropertySchema.index({ isStudentFriendly: 1, 'studentDetails.campusProximityMeters': 1 });
+// Filter for Student-Approved landlord badge
+PropertySchema.index({ isStudentFriendly: 1, 'studentDetails.isStudentApproved': 1 });
+// Filter by water source and electricity backup
+PropertySchema.index({ 'studentDetails.waterSource': 1 });
+PropertySchema.index({ 'studentDetails.electricityBackup': 1 });
+// Colocation: find properties with available beds
+PropertySchema.index({ isStudentFriendly: 1, 'studentDetails.availableBeds': 1 });
+// Price per person search
+PropertySchema.index({ isStudentFriendly: 1, 'studentDetails.pricePerPersonMonthly': 1 });
+PropertySchema.index({ tourType: 1, isActive: 1 }); // tour browse filter

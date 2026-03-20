@@ -14,7 +14,62 @@ export enum UserRole {
   REGISTERED_USER = 'registered_user',
   /** User who books short-term stays (hotels, vacation rentals, featured houses). */
   GUEST = 'guest',
+  /** University student — access to student housing search, roommate matching, and student-verified listings. */
+  STUDENT = 'student',
 }
+
+// ─── Student verification status ─────────────────────────────────────────────
+
+export enum StudentVerificationStatus {
+  /** Student has not yet submitted their ID */
+  UNVERIFIED = 'unverified',
+  /** ID uploaded, awaiting manual or automated review */
+  PENDING = 'pending',
+  /** ID confirmed — student gains access to roommate pool and verified listings */
+  VERIFIED = 'verified',
+  /** ID was rejected (expired, wrong doc type, unreadable) */
+  REJECTED = 'rejected',
+}
+
+// ─── Student profile subdocument ──────────────────────────────────────────────
+
+export interface StudentProfile {
+  /** Full name of the university as it appears on the student ID */
+  universityName: string;
+  /** e.g. "Faculty of Engineering and Technology" */
+  faculty?: string;
+  /** e.g. "L1", "L2", "L3", "Master 1", "Master 2", "PhD" */
+  studyLevel?: string;
+  /** Year they enrolled, e.g. 2023 */
+  enrollmentYear?: number;
+  /** Cloudinary URL of their university ID photo */
+  studentIdUrl?: string;
+  /** Cloudinary public_id for the uploaded ID (needed for deletion) */
+  studentIdPublicId?: string;
+  /** Human-readable verification state */
+  verificationStatus: StudentVerificationStatus;
+  /** Date the ID was submitted for verification */
+  verificationSubmittedAt?: Date;
+  /** Date the ID was approved or rejected */
+  verificationReviewedAt?: Date;
+  /** Admin note on rejection reason, shown to the student */
+  verificationRejectionReason?: string;
+  /** City of their campus — drives default property search location */
+  campusCity: string;
+  /** Specific campus or university gate coordinates for commute calculations */
+  campusLatitude?: number;
+  campusLongitude?: number;
+  /** ObjectId linking to their active RoommateProfile document (if created) */
+  roommateProfileId?: Types.ObjectId;
+  /** Unique referral/ambassador code if the student is a campus ambassador */
+  ambassadorCode?: string;
+  /** Whether this student is an active campus ambassador */
+  isAmbassador: boolean;
+  /** Total commissions earned as ambassador (in XAF) */
+  ambassadorEarnings?: number;
+}
+
+// ─── Existing interfaces (unchanged) ─────────────────────────────────────────
 
 export type TenantStatus = 'active' | 'ended' | 'pending';
 
@@ -36,13 +91,32 @@ export interface TenantRecord {
 export interface UserPreferences {
   minPrice?: number;
   maxPrice?: number;
+  currency?: string;
   propertyTypes?: string[];
   cities?: string[];
   amenities?: string[];
-  maxRadius?: number; // in kilometers
+  bedrooms?: number[];
+  bathrooms?: number[];
+  maxRadius?: number;
+  minArea?: number;
+  maxArea?: number;
   preferredLocation?: {
     type: 'Point';
-    coordinates: [number, number]; // [lng, lat]
+    coordinates: [number, number];
+  };
+}
+
+export interface AgentPreferences {
+  licenseNumber?: string;
+  agency?: string;
+  experience?: number;
+  specializations?: string[];
+  serviceAreas?: string[];
+  commissionRate?: number;
+  propertyPriceRange?: {
+    min: number;
+    max: number;
+    currency: string;
   };
 }
 
@@ -70,9 +144,11 @@ export interface UserSession {
   expiresAt: Date;
 }
 
+// ─── Schema ───────────────────────────────────────────────────────────────────
+
 @Schema({
   timestamps: true,
-  autoIndex: true, // Enable automatic index creation (disable in production for performance)
+  autoIndex: true,
 })
 export class User {
   @Prop({ required: true, trim: true })
@@ -135,7 +211,7 @@ export class User {
   googleId?: string;
 
   @Prop()
-  password?: string; // For email/password auth
+  password?: string;
 
   @Prop({ default: 0 })
   averageRating?: number;
@@ -161,14 +237,12 @@ export class User {
   @Prop()
   resetPasswordExpires?: Date;
 
-  // Two-factor authentication
   @Prop({ default: false })
   twoFactorEnabled?: boolean;
 
   @Prop()
   twoFactorSecret?: string;
 
-  // Sessions tracking
   @Prop({
     type: [
       {
@@ -188,7 +262,8 @@ export class User {
   })
   sessions: UserSession[];
 
-  // Agent-specific fields
+  // ── Agent-specific fields ─────────────────────────────────────────────────
+
   @Prop()
   licenseNumber?: string;
 
@@ -207,7 +282,8 @@ export class User {
   @Prop({ default: 0 })
   propertiesSold?: number;
 
-  // Landlord-specific fields
+  // ── Landlord-specific fields ──────────────────────────────────────────────
+
   @Prop({
     type: [
       {
@@ -235,7 +311,42 @@ export class User {
   @Prop({ default: 0 })
   occupancyRate?: number;
 
-  // Notification preferences
+  // ── Student-specific fields (NEW) ─────────────────────────────────────────
+
+  /**
+   * Only populated when role === UserRole.STUDENT.
+   * Follows the same pattern as agentPreferences.
+   */
+  @Prop({
+    type: {
+      universityName: { type: String },
+      faculty: { type: String },
+      studyLevel: { type: String },
+      enrollmentYear: { type: Number },
+      studentIdUrl: { type: String },
+      studentIdPublicId: { type: String },
+      verificationStatus: {
+        type: String,
+        enum: Object.values(StudentVerificationStatus),
+        default: StudentVerificationStatus.UNVERIFIED,
+      },
+      verificationSubmittedAt: { type: Date },
+      verificationReviewedAt: { type: Date },
+      verificationRejectionReason: { type: String },
+      campusCity: { type: String },
+      campusLatitude: { type: Number },
+      campusLongitude: { type: Number },
+      roommateProfileId: { type: Types.ObjectId, ref: 'RoommateProfile' },
+      ambassadorCode: { type: String },
+      isAmbassador: { type: Boolean, default: false },
+      ambassadorEarnings: { type: Number, default: 0 },
+    },
+    default: null,
+  })
+  studentProfile?: StudentProfile;
+
+  // ── Notification preferences ──────────────────────────────────────────────
+
   @Prop({ default: true })
   emailNotifications: boolean;
 
@@ -245,7 +356,8 @@ export class User {
   @Prop({ default: true })
   pushNotifications: boolean;
 
-  // Geo location for agents (office location)
+  // ── Location ─────────────────────────────────────────────────────────────
+
   @Prop({
     type: {
       type: String,
@@ -253,7 +365,7 @@ export class User {
       default: 'Point',
     },
     coordinates: {
-      type: [Number], // [lng, lat]
+      type: [Number],
       default: [0, 0],
     },
   })
@@ -271,42 +383,55 @@ export class User {
   @Prop()
   country?: string;
 
+  // ── Onboarding ────────────────────────────────────────────────────────────
+
+  @Prop({ default: false })
+  onboardingCompleted?: boolean;
+
+  @Prop({ type: Object, default: null })
+  agentPreferences?: AgentPreferences;
+
   createdAt: Date;
   updatedAt: Date;
 
   _id: Types.ObjectId;
 }
 
+// ─── Schema factory & indexes ─────────────────────────────────────────────────
+
 export const UserSchema = SchemaFactory.createForClass(User);
 
-// Define indexes explicitly after schema creation
+// Geospatial
 UserSchema.index({ location: '2dsphere' });
-// Note: Indexes for phoneNumber, email, and googleId are already created via
-// @Prop({ unique: true, ... }) above. Avoid redefining them to prevent
-// duplicate index warnings from Mongoose.
-
-// Add indexes on nested fields
 UserSchema.index({ 'preferences.preferredLocation': '2dsphere' });
-UserSchema.index({ 'recentlyViewed.propertyId': 1 });
 
-// Session-related indexes
+// Existing indexes
+UserSchema.index({ 'recentlyViewed.propertyId': 1 });
 UserSchema.index({ 'sessions.id': 1 });
 UserSchema.index({ 'sessions.refreshToken': 1 });
 UserSchema.index({ 'sessions.expiresAt': 1 });
 UserSchema.index({ 'sessions.isActive': 1 });
-
-// Optional indexes you may want to add:
 UserSchema.index({ role: 1 });
 UserSchema.index({ city: 1 });
 UserSchema.index({ country: 1 });
 UserSchema.index({ isActive: 1 });
+
+// Student-specific indexes (NEW)
+// Fast lookup for admin verification queue
+UserSchema.index({ 'studentProfile.verificationStatus': 1 });
+// Fast lookup for ambassador code redemption
+UserSchema.index({ 'studentProfile.ambassadorCode': 1 }, { sparse: true });
+// Fast lookup for roommate profile linking
+UserSchema.index({ 'studentProfile.roommateProfileId': 1 }, { sparse: true });
+// Filter students by campus city for roommate matching
+UserSchema.index({ role: 1, 'studentProfile.campusCity': 1 });
 
 // Virtual id getter
 UserSchema.virtual('id').get(function (this: UserDocument) {
   return this._id.toString();
 });
 
-// JSON transformation (hide sensitive fields)
+// JSON transformation — hide sensitive fields
 UserSchema.set('toJSON', {
   virtuals: true,
   versionKey: false,
@@ -316,7 +441,11 @@ UserSchema.set('toJSON', {
     delete ret.phoneVerificationCode;
     delete ret.emailVerificationToken;
     delete ret.resetPasswordToken;
-    // Hide refresh tokens from sessions in JSON response
+    // Strip student ID Cloudinary public_id from API responses
+    if (ret.studentProfile?.studentIdPublicId) {
+      delete ret.studentProfile.studentIdPublicId;
+    }
+    // Strip refresh tokens from sessions
     if (ret.sessions && Array.isArray(ret.sessions)) {
       ret.sessions = ret.sessions.map((session: any) => {
         const { refreshToken, ...sessionWithoutToken } = session;

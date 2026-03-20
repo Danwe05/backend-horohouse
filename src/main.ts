@@ -45,7 +45,7 @@ async function bootstrap() {
 
   // CORS configuration
   await app.register(cors as any, {
-    origin: [frontendUrl, 'http://localhost:3000', 'http://localhost:3001'],
+    origin: [frontendUrl, 'http://localhost:3000', 'http://horohouse.com'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],

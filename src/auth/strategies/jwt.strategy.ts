@@ -28,7 +28,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       });
 
       const user: UserDocument = await this.authService.validateUser(payload);
-      
+
       console.log('[JwtStrategy] User validated:', {
         userId: user._id.toString(),
         role: user.role,
@@ -51,6 +51,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         phoneVerified: user.phoneVerified,
         profilePicture: user.profilePicture,
         isActive: user.isActive,
+        preferences: user.preferences,
+        agentPreferences: user.agentPreferences,
+        onboardingCompleted: user.onboardingCompleted,
+        licenseNumber: user.licenseNumber,
+        agency: user.agency
       };
 
       console.log('[JwtStrategy] Returning normalized user with userId:', normalizedUser.userId);

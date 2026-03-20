@@ -33,6 +33,11 @@ import { SystemSettingsModule } from './system-settings/system-settings.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { ReportsModule } from './reports/reports.module';
 import { RoomsModule } from './rooms/rooms.module';
+import { StudentProfilesModule } from './student-profiles/student-profiles.module';
+import { StudentPropertiesModule } from './student-properties/student-properties.module';
+import { SplitPaymentsModule } from './split-payments/split-payments.module';
+import { DigitalLeaseModule } from './digital-lease/digital-lease.module';
+import { RoommateMatchingModule } from './roommate/roommate.module';
 
 @Module({
   imports: [
@@ -88,13 +93,16 @@ import { RoomsModule } from './rooms/rooms.module';
     BookingsModule,
     ReportsModule,
     RoomsModule,
+    StudentProfilesModule,
+    StudentPropertiesModule,
+    SplitPaymentsModule,
+    DigitalLeaseModule,
+    RoommateMatchingModule
   ],
 
-  // ✅ ADD THESE — without them AppController is never registered
-  // and GET /api/v1/health returns 404
   controllers: [AppController],
   providers: [
-    AppService, // ✅ required — AppController depends on AppService via DI
+    AppService,
     {
       provide: APP_GUARD,
       useFactory: (configService: ConfigService) =>

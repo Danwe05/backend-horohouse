@@ -8,6 +8,7 @@ import { BookingsService } from './bookings.service';
 import { BookingsController } from './bookings.controller';
 import { BookingsScheduler } from './bookings.scheduler';
 import { RoomsModule } from '../rooms/rooms.module';
+import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -17,7 +18,8 @@ import { RoomsModule } from '../rooms/rooms.module';
       { name: Property.name, schema: PropertySchema },
       { name: User.name, schema: UserSchema },
     ]),
-    forwardRef(() => RoomsModule), // forwardRef prevents circular dep: Bookings <-> Rooms
+    forwardRef(() => RoomsModule), 
+    NotificationsModule
   ],
   controllers: [BookingsController],
   providers: [BookingsService, BookingsScheduler],

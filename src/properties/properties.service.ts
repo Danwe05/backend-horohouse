@@ -432,7 +432,7 @@ export class PropertiesService {
             }
             : undefined,
           neighborhood: property.neighborhood,
-        }); 
+        });
       }
 
       return property;
@@ -1304,6 +1304,13 @@ export class PropertiesService {
     }
 
     return [...new Set(keywords)].filter(keyword => keyword.length > 2);
+  }
+
+  async trackTourView(propertyId: string): Promise<void> {
+    if (!Types.ObjectId.isValid(propertyId)) return;
+    await this.propertyModel
+      .findByIdAndUpdate(propertyId, { $inc: { tourViews: 1 } })
+      .exec();
   }
 
   private buildFilterQuery(filters: PropertySearchFilters): any {
