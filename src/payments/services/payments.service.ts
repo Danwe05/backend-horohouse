@@ -6,6 +6,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { FlutterwaveService } from './flutterwave.service';
+import { WalletService } from './wallet.service';
 
 import {
   Transaction, TransactionDocument,
@@ -23,6 +24,9 @@ import { User, UserDocument } from '../../users/schemas/user.schema';
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
 
+  /** Platform fee taken from each booking payout (10%) */
+  private readonly BOOKING_PLATFORM_FEE_RATE = 0.10;
+
   constructor(
     @InjectModel(Transaction.name) private transactionModel: Model<TransactionDocument>,
     @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,
@@ -30,6 +34,7 @@ export class PaymentsService {
     private readonly notificationsService: NotificationsService,
     private flutterwaveService: FlutterwaveService,
     private configService: ConfigService,
+    private walletService: WalletService,
   ) { }
 
   // ════════════════════════════════════════════════════════════════════════
@@ -331,21 +336,23 @@ export class PaymentsService {
       }
 
       const { event, data } = payload;
-      this.logger.log(`Webhook received: ${event}, txRef: ${data.tx_ref}`);
+      this.logger.log(`Webhook received: ${event}, ref: ${data.reference ?? data.tx_ref}`);
 
+      // Transfer webhooks use data.reference; charge webhooks use data.tx_ref
+      const flwRef = data.reference ?? data.tx_ref;
       const transaction = await this.transactionModel.findOne({
-        flutterwaveReference: data.tx_ref,
+        flutterwaveReference: flwRef,
       });
 
       if (!transaction) {
-        this.logger.error(`Transaction not found for reference: ${data.tx_ref}`);
+        this.logger.warn(`No transaction found for reference: ${flwRef} (event: ${event})`);
         return;
       }
 
       switch (event) {
+        // ── Incoming payments (bookings, subscriptions, etc.) ─────────────────
         case 'charge.completed':
           if (data.status === 'successful' && data.amount >= transaction.amount) {
-            // Idempotency guard
             if (transaction.status === TransactionStatus.SUCCESS) {
               this.logger.log(`Duplicate webhook for already-successful tx: ${transaction._id}`);
               return;
@@ -354,11 +361,10 @@ export class PaymentsService {
             transaction.completedAt = new Date();
             transaction.flutterwaveTransactionId = data.id.toString();
             transaction.paymentProviderResponse = data;
-            // Update paymentMethod from actual webhook data
             transaction.paymentMethod = this.mapFlwPaymentType(data.payment_type);
             await transaction.save();
             await this.processSuccessfulPayment(transaction);
-            this.logger.log(`Webhook: Payment successful — tx: ${transaction._id}`);
+            this.logger.log(`Webhook: charge successful — tx: ${transaction._id}`);
           }
           break;
 
@@ -367,8 +373,42 @@ export class PaymentsService {
           transaction.failureReason = data.processor_response || 'Payment failed';
           transaction.paymentProviderResponse = data;
           await transaction.save();
-          this.logger.log(`Webhook: Payment failed — tx: ${transaction._id}`);
+          this.logger.log(`Webhook: charge failed — tx: ${transaction._id}`);
           break;
+
+        // ── Outgoing payouts (wallet withdrawals) ─────────────────────────────
+        case 'transfer.completed':
+          if (transaction.status !== TransactionStatus.SUCCESS) {
+            transaction.status = TransactionStatus.SUCCESS;
+            transaction.completedAt = new Date();
+            transaction.flutterwaveTransactionId = data.id?.toString();
+            transaction.paymentProviderResponse = data;
+            await transaction.save();
+            this.logger.log(`Webhook: withdrawal delivered — tx: ${transaction._id}`);
+          }
+          break;
+
+        case 'transfer.failed':
+        case 'transfer.reversed': {
+          // Payout failed after we already debited — refund the wallet
+          const alreadyRefunded = transaction.status === TransactionStatus.FAILED;
+          transaction.status = TransactionStatus.FAILED;
+          transaction.failureReason = data.complete_message || data.status_desc || 'Payout failed';
+          transaction.paymentProviderResponse = data;
+          await transaction.save();
+          this.logger.warn(`Webhook: withdrawal failed — tx: ${transaction._id}, refunding wallet`);
+
+          if (!alreadyRefunded) {
+            await this.walletService.creditWallet(
+              transaction.userId.toString(),
+              transaction.amount,
+              `Withdrawal refund — payout failed (${event})`,
+              `REFUND-${transaction.flutterwaveReference}`,
+            );
+            this.logger.log(`Wallet refunded for failed withdrawal — user: ${transaction.userId}`);
+          }
+          break;
+        }
 
         default:
           this.logger.log(`Unhandled webhook event: ${event}`);
@@ -508,16 +548,68 @@ export class PaymentsService {
       `txRef: ${transaction.flutterwaveReference} | autoConfirmed: ${isInstantBookable}`,
     );
 
-    // Notify host that payment came in
-    const guest = await this.userModel.findById(booking.guestId).select('name').lean();
-    const property = (booking.propertyId as any);
+    // ── Credit the host wallet and create a COMMISSION transaction ──────────
+    const totalPaid = booking.priceBreakdown.totalAmount;
+    const platformCut = Math.round(totalPaid * this.BOOKING_PLATFORM_FEE_RATE);
+    const hostPayout = totalPaid - platformCut;
+    const hostIdStr = booking.hostId.toString();
+    const currency = (booking.currency ?? 'XAF') as Currency;
 
-    await this.notificationsService.notifyPaymentReceived(booking.hostId.toString(), {
+    const propertyForPayout = (booking.propertyId as any);
+    const propertyTitle = propertyForPayout?.title ?? 'Property';
+
+    // 1. Create a Transaction record under the host's account (type: COMMISSION)
+    //    so it shows up in their Payment Activity tab as income.
+    const commissionDesc: string = `Booking income: ${propertyTitle} - ${booking.nights} night${booking.nights !== 1 ? 's' : ''} (net after ${this.BOOKING_PLATFORM_FEE_RATE * 100}% platform fee)`;
+    const commissionTx = new this.transactionModel({
+      userId: booking.hostId,
+      bookingId: booking._id,
+      propertyId: booking.propertyId,
+      amount: hostPayout,
+      currency,
+      type: TransactionType.COMMISSION,
+      status: TransactionStatus.SUCCESS,
+      paymentMethod: transaction.paymentMethod,
+      flutterwaveReference: transaction.flutterwaveReference,
+      description: commissionDesc,
+      platformFee: platformCut,
+      paymentProcessingFee: 0,
+      netAmount: hostPayout,
+      completedAt: new Date(),
+      metadata: {
+        bookingId: booking._id.toString(),
+        guestTotalPaid: totalPaid,
+        platformFee: platformCut,
+        hostPayout,
+        checkIn: booking.checkIn.toISOString(),
+        checkOut: booking.checkOut.toISOString(),
+      },
+    });
+    await commissionTx.save();
+
+    // 2. Credit the host's wallet balance.
+    await this.walletService.creditWallet(
+      hostIdStr,
+      hostPayout,
+      commissionDesc,
+      transaction.flutterwaveReference ?? undefined,
+      commissionTx._id as Types.ObjectId,
+    );
+
+    this.logger.log(
+      `Host payout | host: ${hostIdStr} | payout: ${hostPayout} ${currency} | ` +
+      `platform fee: ${platformCut} | booking: ${booking._id}`,
+    );
+
+    // ── Notify host that payment came in ─────────────────────────────────────
+    const guest = await this.userModel.findById(booking.guestId).select('name').lean();
+
+    await this.notificationsService.notifyPaymentReceived(hostIdStr, {
       bookingId: booking._id.toString(),
-      propertyTitle: property?.title ?? 'your property',
+      propertyTitle,
       guestName: (guest as any)?.name ?? 'A guest',
-      amount: booking.priceBreakdown.totalAmount,
-      currency: booking.currency ?? 'XAF',
+      amount: hostPayout,
+      currency,
     });
   }
 

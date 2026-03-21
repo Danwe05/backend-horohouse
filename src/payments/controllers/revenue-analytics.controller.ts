@@ -89,10 +89,9 @@ export class RevenueAnalyticsController {
   }
 
   @Get('monthly-chart')
-  @Roles(UserRole.ADMIN)
   @ApiOperation({ 
     summary: 'Get monthly revenue chart data',
-    description: 'Returns revenue data for the specified number of months for chart visualization. Admin only.',
+    description: 'Returns revenue data for the specified number of months for chart visualization.',
   })
   @ApiQuery({ 
     name: 'months', 

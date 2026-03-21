@@ -88,6 +88,7 @@ export class WalletService {
     };
 
     wallet.balance += amount;
+    wallet.availableBalance = (wallet.availableBalance ?? 0) + amount;
     wallet.totalEarned += amount;
     wallet.transactions.unshift(transaction);
     wallet.lastTransactionDate = new Date();
@@ -123,6 +124,7 @@ export class WalletService {
     };
 
     wallet.balance -= amount;
+    wallet.availableBalance = Math.max(0, (wallet.availableBalance ?? 0) - amount);
     wallet.transactions.unshift(transaction);
     wallet.lastTransactionDate = new Date();
 
@@ -195,11 +197,12 @@ export class WalletService {
       );
     }
 
-    if (wallet.balance < amount) {
+    const available = wallet.availableBalance || wallet.balance;
+    if (available < amount) {
       throw new BadRequestException('Insufficient balance');
     }
 
-    // Debit wallet first
+    // Debit wallet immediately — user's balance is reserved
     await this.debitWallet(
       userId,
       amount,
@@ -207,73 +210,99 @@ export class WalletService {
       `WD-${Date.now()}`,
     );
 
+    // Persist the withdrawal as 'pending' right away so the user gets a success response
+    const reference = `WD-${Date.now()}`;
+    const transaction = new this.transactionModel({
+      userId: new Types.ObjectId(userId),
+      amount,
+      currency: 'XAF',
+      type: TransactionType.WALLET_WITHDRAWAL,
+      status: 'pending',
+      paymentMethod: withdrawalMethod,
+      description: `Withdrawal to ${withdrawalMethod}`,
+      flutterwaveReference: reference,
+    });
+    await transaction.save();
+
+    // Update totalWithdrawn counter
+    wallet.totalWithdrawn = (wallet.totalWithdrawn || 0) + amount;
+    await wallet.save();
+
+    // Dispatch Flutterwave payout in the background — never block or throw to the user.
+    // If Flutterwave rejects, the tx stays 'pending' for manual / cron retry.
+    this.dispatchFlutterwavePayout(
+      amount,
+      withdrawalMethod,
+      accountDetails,
+      reference,
+      transaction._id as Types.ObjectId,
+    ).catch(err =>
+      this.logger.error(`Background Flutterwave payout error (tx ${transaction._id}): ${err.message}`),
+    );
+
+    this.logger.log(`Withdrawal queued: ${userId} - ${amount} XAF via ${withdrawalMethod}`);
+
+    return {
+      message: 'Withdrawal request submitted successfully',
+      amount,
+      withdrawalMethod,
+      estimatedTime: '24-48 hours',
+      transaction,
+    };
+  }
+
+  /**
+   * Attempt to push the actual payout to Flutterwave.
+   * Runs in the background — failures are logged but never surface to the user.
+   */
+  private async dispatchFlutterwavePayout(
+    amount: number,
+    withdrawalMethod: string,
+    accountDetails: { phoneNumber?: string; accountNumber?: string; accountName?: string; bankCode?: string },
+    reference: string,
+    transactionId: Types.ObjectId,
+  ): Promise<void> {
     try {
-      // Process withdrawal with Flutterwave
-      let withdrawalResponse;
+      let payload: any;
 
       if (withdrawalMethod === 'bank_transfer') {
-        // Bank transfer withdrawal
-        withdrawalResponse = await this.flutterwaveService.initiateBankTransfer({
+        payload = {
           account_bank: accountDetails.bankCode,
           account_number: accountDetails.accountNumber,
           amount,
           currency: 'XAF',
           narration: 'HoroHouse withdrawal',
-          reference: `WD-${Date.now()}`,
+          reference,
           beneficiary_name: accountDetails.accountName,
-        });
+        };
       } else {
-        // Mobile Money withdrawal
         const network = withdrawalMethod === 'mtn_momo' ? 'MTN' : 'ORANGE';
-        
-        withdrawalResponse = await this.flutterwaveService.initiateBankTransfer({
+        payload = {
           account_bank: network,
           account_number: accountDetails.phoneNumber!,
           amount,
           currency: 'XAF',
           narration: 'HoroHouse withdrawal',
-          reference: `WD-${Date.now()}`,
-        });
+          reference,
+        };
       }
 
-      // Create transaction record
-      const transaction = new this.transactionModel({
-        userId: new Types.ObjectId(userId),
-        amount,
-        currency: 'XAF',
-        type: TransactionType.WALLET_WITHDRAWAL,
-        status: 'pending',
-        paymentMethod: withdrawalMethod,
-        description: `Withdrawal to ${withdrawalMethod}`,
-        paymentProviderResponse: withdrawalResponse,
+      const flwResponse = await this.flutterwaveService.initiateBankTransfer(payload);
+      this.logger.log(`Flutterwave payout accepted: ${JSON.stringify(flwResponse)}`);
+
+      // Mark as successful once Flutterwave confirms
+      await this.transactionModel.findByIdAndUpdate(transactionId, {
+        status: 'success',
+        paymentProviderResponse: flwResponse,
+        completedAt: new Date(),
       });
-
-      await transaction.save();
-
-      // Update wallet - handle optional totalWithdrawn
-      wallet.totalWithdrawn = (wallet.totalWithdrawn || 0) + amount;
-      await wallet.save();
-
-      this.logger.log(`Withdrawal requested: ${userId} - ${amount} XAF`);
-
-      return {
-        message: 'Withdrawal request submitted successfully',
-        amount,
-        withdrawalMethod,
-        estimatedTime: '24-48 hours',
-        transaction,
-      };
     } catch (error) {
-      // Rollback wallet debit if withdrawal fails
-      await this.creditWallet(
-        userId,
-        amount,
-        'Withdrawal reversal - failed',
-        `WDR-${Date.now()}`,
-      );
-
-      this.logger.error(`Withdrawal failed: ${error.message}`);
-      throw new BadRequestException('Withdrawal failed. Please try again later.');
+      this.logger.error(`Flutterwave payout failed (tx ${transactionId}): ${error.message}`);
+      // Store the error on the transaction for later inspection / retry
+      await this.transactionModel.findByIdAndUpdate(transactionId, {
+        paymentProviderResponse: { error: error.message },
+      });
+      throw error;
     }
   }
 
@@ -380,6 +409,7 @@ export class WalletService {
 
     return {
       balance: wallet.balance,
+      availableBalance: wallet.availableBalance || wallet.balance,
       pendingBalance: wallet.pendingBalance,
       totalEarned: wallet.totalEarned,
       totalWithdrawn: wallet.totalWithdrawn || 0,
@@ -388,6 +418,14 @@ export class WalletService {
       lastTransactionDate: wallet.lastTransactionDate,
       autoWithdrawal: wallet.autoWithdrawal,
       autoWithdrawalThreshold: wallet.autoWithdrawalThreshold,
+      // payout account details for the withdraw modal
+      bankAccountName: wallet.bankAccountName,
+      bankAccountNumber: wallet.bankAccountNumber,
+      bankName: wallet.bankName,
+      bankCode: wallet.bankCode,
+      mobileMoneyNumber: wallet.mobileMoneyNumber,
+      mobileMoneyProvider: wallet.mobileMoneyProvider,
+      currency: 'XAF',
     };
   }
 }
