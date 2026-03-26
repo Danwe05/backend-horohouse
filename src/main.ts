@@ -3,7 +3,6 @@ import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify
 import { ValidationPipe, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { IoAdapter } from '@nestjs/platform-socket.io';
 import helmet from '@fastify/helmet';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
@@ -13,10 +12,6 @@ import { AppModule } from './app.module';
 const ALLOWED_ORIGINS = [
   'https://horohouse.com',
   'https://www.horohouse.com',
-  'http://localhost:3000',
-  'http://localhost:8081',
-  'http://localhost:8082',
-  'http://10.187.122.37:8081',
 ];
 
 const CORS_OPTIONS = {
@@ -42,9 +37,9 @@ const HELMET_OPTIONS = {
 const MULTIPART_OPTIONS = {
   limits: {
     fieldNameSize: 100,
-    fieldSize: 1024 * 1024 * 10,   // 10MB
+    fieldSize: 1024 * 1024 * 10,
     fields: 10,
-    fileSize: 1024 * 1024 * 50,    // 50MB
+    fileSize: 1024 * 1024 * 50,
     files: 15,
     headerPairs: 2000,
   },
@@ -80,16 +75,16 @@ function setupMongoEvents(logger: Logger) {
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
+  // ✅ NO IoAdapter — Fastify handles WebSockets natively via gateways
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: true, maxParamLength: 100 }),
+    new FastifyAdapter({ logger: false }), // ← remove maxParamLength (deprecated)
   );
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 3000);
 
-  // Adapters & plugins
-  app.useWebSocketAdapter(new IoAdapter(app));
+  // Plugins
   await app.register(helmet as any, HELMET_OPTIONS);
   await app.register(cors as any, CORS_OPTIONS);
   await app.register(multipart as any, MULTIPART_OPTIONS);
@@ -106,20 +101,21 @@ async function bootstrap() {
     },
   }));
 
-  // Swagger docs
+  // Swagger
   setupSwagger(app);
 
   // Global prefix
   app.setGlobalPrefix('api/v1');
 
-  // MongoDB connection events
+  // MongoDB events
   setupMongoEvents(logger);
 
+  // ✅ This will now correctly bind to 0.0.0.0
   await app.listen(port, '0.0.0.0');
 
   logger.log(`🚀 HoroHouse Backend running on port ${port}`);
-  logger.log(`📚 API Docs: https://api.horohouse.com/api/docs`);
-  logger.log(`🔌 WebSocket ready at: wss://api.horohouse.com/chat`);
+  logger.log(`📚 API Docs: https://backend-horohouse-production.up.railway.app/api/docs`);
+  logger.log(`🔌 WebSocket ready`);
   logger.log(`🌍 Allowed origins: ${ALLOWED_ORIGINS.join(', ')}`);
   logger.log(`🔑 JWT Secret configured: ${!!configService.get('JWT_SECRET')}`);
 }

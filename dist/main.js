@@ -5,7 +5,6 @@ const platform_fastify_1 = require("@nestjs/platform-fastify");
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const swagger_1 = require("@nestjs/swagger");
-const platform_socket_io_1 = require("@nestjs/platform-socket.io");
 const helmet_1 = require("@fastify/helmet");
 const cors_1 = require("@fastify/cors");
 const multipart_1 = require("@fastify/multipart");
@@ -14,10 +13,6 @@ const app_module_1 = require("./app.module");
 const ALLOWED_ORIGINS = [
     'https://horohouse.com',
     'https://www.horohouse.com',
-    'http://localhost:3000',
-    'http://localhost:8081',
-    'http://localhost:8082',
-    'http://10.187.122.37:8081',
 ];
 const CORS_OPTIONS = {
     origin: ALLOWED_ORIGINS,
@@ -73,10 +68,9 @@ function setupMongoEvents(logger) {
 }
 async function bootstrap() {
     const logger = new common_1.Logger('Bootstrap');
-    const app = await core_1.NestFactory.create(app_module_1.AppModule, new platform_fastify_1.FastifyAdapter({ logger: true, maxParamLength: 100 }));
+    const app = await core_1.NestFactory.create(app_module_1.AppModule, new platform_fastify_1.FastifyAdapter({ logger: false }));
     const configService = app.get(config_1.ConfigService);
     const port = configService.get('PORT', 3000);
-    app.useWebSocketAdapter(new platform_socket_io_1.IoAdapter(app));
     await app.register(helmet_1.default, HELMET_OPTIONS);
     await app.register(cors_1.default, CORS_OPTIONS);
     await app.register(multipart_1.default, MULTIPART_OPTIONS);
@@ -95,8 +89,8 @@ async function bootstrap() {
     setupMongoEvents(logger);
     await app.listen(port, '0.0.0.0');
     logger.log(`🚀 HoroHouse Backend running on port ${port}`);
-    logger.log(`📚 API Docs: https://api.horohouse.com/api/docs`);
-    logger.log(`🔌 WebSocket ready at: wss://api.horohouse.com/chat`);
+    logger.log(`📚 API Docs: https://backend-horohouse-production.up.railway.app/api/docs`);
+    logger.log(`🔌 WebSocket ready`);
     logger.log(`🌍 Allowed origins: ${ALLOWED_ORIGINS.join(', ')}`);
     logger.log(`🔑 JWT Secret configured: ${!!configService.get('JWT_SECRET')}`);
 }
