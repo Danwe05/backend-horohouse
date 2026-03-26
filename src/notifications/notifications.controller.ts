@@ -138,7 +138,7 @@ export class NotificationsController {
   /**
    * DELETE /notifications/read
    * Clears all already-read notifications for the user.
-   * Must be declared BEFORE /:id to avoid route shadowing.
+   * Must be declared BEFORE /:id to avoid route totoing.
    */
   @Delete('read')
   @ApiOperation({ summary: 'Delete all read notifications' })

@@ -106,7 +106,7 @@ export class UsersService {
     const user = await this.userModel
       .findById(id)
       .select('-firebaseUid')
-      .populate('favorites', 'title images pricing address')
+      .populate('favorites', 'title images price city address bedrooms bathrooms area type listingType isVerified')
       .exec();
 
     if (!user) {
@@ -290,7 +290,7 @@ export class UsersService {
         { new: true }
       )
       .select('-firebaseUid')
-      .populate('favorites', 'title images pricing address')
+      .populate('favorites', 'title images price city address bedrooms bathrooms area type listingType isVerified')
       .exec();
 
     if (!user) {
@@ -311,7 +311,7 @@ export class UsersService {
         { new: true }
       )
       .select('-firebaseUid')
-      .populate('favorites', 'title images pricing address')
+      .populate('favorites', 'title images price city address bedrooms bathrooms area type listingType isVerified')
       .exec();
 
     if (!user) {
@@ -358,7 +358,7 @@ export class UsersService {
       .findById(userId)
       .populate({
         path: 'recentlyViewed.propertyId',
-        select: 'title images pricing address type status',
+        select: 'title images price address type status',
         options: { limit },
       })
       .exec();

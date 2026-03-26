@@ -14,6 +14,9 @@ const ALLOWED_ORIGINS = [
   'https://horohouse.com',
   'https://www.horohouse.com',
   'http://localhost:3000',
+  'http://localhost:8081',
+  'http://localhost:8082',
+  'http://10.187.122.37:8081',
 ];
 
 const CORS_OPTIONS = {
@@ -83,7 +86,7 @@ async function bootstrap() {
   );
 
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT', 4000);
+  const port = configService.get<number>('PORT', 3000);
 
   // Adapters & plugins
   app.useWebSocketAdapter(new IoAdapter(app));
