@@ -8,6 +8,9 @@ import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import mongoose from 'mongoose';
 import { AppModule } from './app.module';
+import { webcrypto } from 'crypto';
+
+if (!globalThis.crypto) { globalThis.crypto = webcrypto as Crypto; }
 
 const ALLOWED_ORIGINS = [
   'https://horohouse.com',

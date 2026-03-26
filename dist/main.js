@@ -10,6 +10,10 @@ const cors_1 = require("@fastify/cors");
 const multipart_1 = require("@fastify/multipart");
 const mongoose_1 = require("mongoose");
 const app_module_1 = require("./app.module");
+const crypto_1 = require("crypto");
+if (!globalThis.crypto) {
+    globalThis.crypto = crypto_1.webcrypto;
+}
 const ALLOWED_ORIGINS = [
     'https://horohouse.com',
     'https://www.horohouse.com',
