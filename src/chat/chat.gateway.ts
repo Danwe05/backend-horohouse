@@ -1,4 +1,4 @@
-// src/chat/chat.gateway.ts - FIXED VERSION WITH USER POPULATION
+
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -50,7 +50,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     private readonly chatService: ChatService,
     private readonly callService: CallService,
     private readonly jwtService: JwtService,
-    @InjectModel(User.name) private userModel: Model<UserDocument>, // CRITICAL: Inject User model
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
   ) { }
 
   afterInit(server: Server) {
@@ -62,10 +62,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       try {
         const token = socket.handshake?.auth?.token;
 
-        this.logger.log(`🔐 Connection attempt:`);
-        this.logger.log(`   - Socket ID: ${socket.id}`);
-        this.logger.log(`   - From: ${socket.handshake.address}`);
-        this.logger.log(`   - Token present: ${!!token}`);
+        this.logger.log(`🔐 Connection attempt - Socket ID: ${socket.id}, Token present: ${!!token}`);
 
         if (!token) {
           this.logger.warn('❌ Connection rejected: No token provided');
@@ -82,14 +79,10 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
             userId: payload.sub || payload.userId,
           };
 
-          this.logger.log(`✅ Token verified successfully:`);
-          this.logger.log(`   - User ID: ${payload.sub || payload.userId}`);
-          this.logger.log(`   - Email: ${payload.email}`);
-
+          this.logger.log(`✅ Token verified - User ID: ${payload.sub || payload.userId}, Email: ${payload.email}`);
           next();
         } catch (error) {
-          this.logger.error(`❌ Token verification failed:`);
-          this.logger.error(`   - Error: ${error.message}`);
+          this.logger.error(`❌ Token verification failed: ${error.message}`);
           return next(new Error(`Authentication error: ${error.message}`));
         }
       } catch (error) {
@@ -105,9 +98,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     try {
       const userId = client.data.user?.userId || client.data.user?.sub;
 
-      this.logger.log(`📥 New connection attempt:`);
-      this.logger.log(`   - Socket ID: ${client.id}`);
-      this.logger.log(`   - User ID: ${userId}`);
+      this.logger.log(`📥 New connection - Socket ID: ${client.id}, User ID: ${userId}`);
 
       if (!userId) {
         this.logger.warn('❌ Connection rejected: No user data in socket.data');
@@ -121,14 +112,9 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       }
       this.userSockets.get(userId)!.add(client.id);
 
-      this.logger.log(`✅ User ${userId} connected successfully`);
-      this.logger.log(`   - Socket ID: ${client.id}`);
-      this.logger.log(`   - Total sockets for user: ${this.userSockets.get(userId)!.size}`);
+      this.logger.log(`✅ User ${userId} connected (${this.userSockets.get(userId)!.size} sockets)`);
 
-      this.server.emit('user:status', {
-        userId,
-        status: 'online',
-      });
+      this.server.emit('user:status', { userId, status: 'online' });
 
       client.emit('connection:success', {
         userId,
@@ -136,7 +122,6 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         timestamp: new Date().toISOString(),
         message: 'Connected successfully to chat server',
       });
-
     } catch (error) {
       this.logger.error(`❌ Connection error: ${error.message}`);
       client.emit('error', { message: `Connection failed: ${error.message}` });
@@ -148,22 +133,16 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     try {
       const userId = client.data.user?.userId || client.data.user?.sub;
 
-      this.logger.log(`📤 Disconnection:`);
-      this.logger.log(`   - Socket ID: ${client.id}`);
-      this.logger.log(`   - User ID: ${userId}`);
+      this.logger.log(`📤 Disconnection - Socket ID: ${client.id}, User ID: ${userId}`);
 
       if (userId) {
         const sockets = this.userSockets.get(userId);
         if (sockets) {
           sockets.delete(client.id);
-
           if (sockets.size === 0) {
             this.userSockets.delete(userId);
-            this.server.emit('user:status', {
-              userId,
-              status: 'offline',
-            });
-            this.logger.log(`   - User ${userId} is now offline`);
+            this.server.emit('user:status', { userId, status: 'offline' });
+            this.logger.log(`   User ${userId} is now offline`);
           }
         }
       }
@@ -195,7 +174,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   ) {
     try {
       const userId = client.data.user.userId || client.data.user.sub;
-      this.logger.log(`📨 Sending message from user ${userId}`);
+      this.logger.log(`📨 Sending message from user ${userId}, tempId: ${data.tempId}`);
 
       const message = await this.chatService.sendMessage(userId, {
         conversationId: data.conversationId,
@@ -203,11 +182,19 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         type: data.type || 'text',
       });
 
+      // Broadcast to everyone in the room (including sender via message:new)
       this.server.to(`conversation:${data.conversationId}`).emit('message:new', {
         message,
       });
 
-      client.emit('message:sent', { message });
+      // FIX: Echo tempId back to sender so the optimistic message can be replaced
+      // by the real server message. Without tempId the frontend can't match them.
+      client.emit('message:sent', {
+        message: {
+          ...message,
+          tempId: data.tempId, // ← KEY FIX: return tempId so frontend replaces optimistic msg
+        },
+      });
 
       return { success: true, message };
     } catch (error) {
@@ -223,11 +210,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   ) {
     try {
       const userId = client.data.user.userId || client.data.user.sub;
-      await this.chatService.markMessagesAsRead(
-        data.conversationId,
-        userId,
-        data.messageIds,
-      );
+      await this.chatService.markMessagesAsRead(data.conversationId, userId, data.messageIds);
 
       this.server.to(`conversation:${data.conversationId}`).emit('messages:read', {
         messageIds: data.messageIds,
@@ -265,10 +248,8 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   // ============================================
-  // CALL EVENTS - FIXED WITH USER POPULATION
+  // CALL EVENTS
   // ============================================
-
-  // Replace ALL your call event handlers with these fixed versions:
 
   @SubscribeMessage('call:initiate')
   async handleCallInitiate(
@@ -281,10 +262,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
       if (!dto.sdpOffer) {
         this.logger.error('❌ No SDP offer provided in call initiation');
-        return {
-          success: false,
-          error: 'SDP offer is required to initiate a call'
-        };
+        return { success: false, error: 'SDP offer is required to initiate a call' };
       }
 
       const call = await this.callService.initiateCall(userId, dto);
@@ -294,11 +272,8 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         p => p.userId._id.toString() !== userId,
       );
 
-      if (!recipientParticipant) {
-        throw new Error('Recipient not found');
-      }
+      if (!recipientParticipant) throw new Error('Recipient not found');
 
-      // CRITICAL FIX: Convert to string immediately
       const recipientId = recipientParticipant.userId._id.toString();
 
       const initiatorUser = await this.userModel
@@ -306,9 +281,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         .select('name profilePicture email')
         .lean();
 
-      if (!initiatorUser) {
-        throw new Error('Initiator user not found in database');
-      }
+      if (!initiatorUser) throw new Error('Initiator user not found in database');
 
       const incomingCallData = {
         call,
@@ -321,11 +294,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         },
       };
 
-      this.logger.log(`📤 Sending incoming call to recipient ${recipientId}`);
-
-      // Emit using string recipient ID
       this.emitToUser(recipientId, 'call:incoming', incomingCallData);
-
       await this.callService.setCallRinging(call._id.toString());
 
       this.logger.log(`✅ Call ${call._id} initiated successfully`);
@@ -346,7 +315,6 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       this.logger.log(`📞 User ${userId} answering call ${dto.callId}`);
 
       if (!dto.sdpAnswer) {
-        this.logger.error('❌ No SDP answer provided');
         return { success: false, error: 'SDP answer is required' };
       }
 
@@ -368,10 +336,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         } : null,
       };
 
-      // CRITICAL FIX: Convert ObjectId to string
       const initiatorIdString = call.initiatorId.toString();
-
-      this.logger.log(`📤 Notifying initiator ${initiatorIdString} of answer`);
       this.emitToUser(initiatorIdString, 'call:answered', answerData);
 
       this.logger.log(`✅ Call ${dto.callId} answered successfully`);
@@ -392,8 +357,6 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       this.logger.log(`❌ User ${userId} declining call ${dto.callId}`);
 
       const call = await this.callService.declineCall(userId, dto);
-
-      // CRITICAL FIX: Convert ObjectId to string
       const initiatorIdString = call.initiatorId.toString();
 
       this.emitToUser(initiatorIdString, 'call:declined', {
@@ -401,7 +364,6 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         reason: dto.reason,
       });
 
-      this.logger.log(`✅ Call ${dto.callId} declined`);
       return { success: true, call };
     } catch (error) {
       this.logger.error('❌ Error declining call:', error);
@@ -419,21 +381,13 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       this.logger.log(`📵 User ${userId} ending call ${dto.callId}`);
 
       const call = await this.callService.endCall(userId, dto);
-
-      // CRITICAL FIX: Convert both ObjectIds to strings
       const initiatorIdString = call.initiatorId.toString();
       const recipientIdString = call.recipientId.toString();
 
-      const otherUserId = initiatorIdString === userId
-        ? recipientIdString
-        : initiatorIdString;
+      const otherUserId = initiatorIdString === userId ? recipientIdString : initiatorIdString;
 
-      this.emitToUser(otherUserId, 'call:ended', {
-        call,
-        reason: dto.reason,
-      });
+      this.emitToUser(otherUserId, 'call:ended', { call, reason: dto.reason });
 
-      this.logger.log(`✅ Call ${dto.callId} ended`);
       return { success: true, call };
     } catch (error) {
       this.logger.error('❌ Error ending call:', error);
@@ -448,25 +402,14 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   ) {
     try {
       this.logger.log(`✅ Call ${data.callId} marked as connected`);
-
       const call = await this.callService.setCallConnected(data.callId);
 
-      // CRITICAL FIX: Convert ObjectIds to strings
       const initiatorIdString = call.initiatorId.toString();
       const recipientIdString = call.recipientId.toString();
 
-      // Notify both parties
-      this.emitToUser(initiatorIdString, 'call:status', {
-        callId: data.callId,
-        status: 'connected',
-      });
+      this.emitToUser(initiatorIdString, 'call:status', { callId: data.callId, status: 'connected' });
+      this.emitToUser(recipientIdString, 'call:status', { callId: data.callId, status: 'connected' });
 
-      this.emitToUser(recipientIdString, 'call:status', {
-        callId: data.callId,
-        status: 'connected',
-      });
-
-      this.logger.log(`✅ Call ${data.callId} connection confirmed`);
       return { success: true, call };
     } catch (error) {
       this.logger.error('❌ Error marking call as connected:', error);
@@ -481,16 +424,12 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   ) {
     try {
       const userId = client.data.user.userId || client.data.user.sub;
-
       const call = await this.callService.getCall(dto.callId);
 
-      // Handle populated fields safely
       const initiator = call.initiatorId as any;
       const recipient = call.recipientId as any;
-
       const initiatorId = initiator._id ? initiator._id.toString() : initiator.toString();
       const recipientId = recipient._id ? recipient._id.toString() : recipient.toString();
-
       const targetUserId = userId === initiatorId ? recipientId : initiatorId;
 
       this.emitToUser(targetUserId, 'call:ice-candidate', {
@@ -499,7 +438,6 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       });
 
       await this.callService.addIceCandidate(dto.callId, dto.candidate);
-
       return { success: true };
     } catch (error) {
       this.logger.error('❌ Error handling ICE candidate:', error);
@@ -514,15 +452,10 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   ) {
     try {
       this.logger.log(`⏰ Call ${data.callId} marked as missed`);
-
       const call = await this.callService.markCallAsMissed(data.callId);
-
-      // CRITICAL FIX: Convert ObjectId to string
       const initiatorIdString = call.initiatorId.toString();
 
       this.emitToUser(initiatorIdString, 'call:missed', { call });
-
-      this.logger.log(`✅ Call ${data.callId} missed notification sent`);
       return { success: true, call };
     } catch (error) {
       this.logger.error('❌ Error marking call as missed:', error);

@@ -45,10 +45,7 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
         server.use(async (socket, next) => {
             try {
                 const token = socket.handshake?.auth?.token;
-                this.logger.log(`🔐 Connection attempt:`);
-                this.logger.log(`   - Socket ID: ${socket.id}`);
-                this.logger.log(`   - From: ${socket.handshake.address}`);
-                this.logger.log(`   - Token present: ${!!token}`);
+                this.logger.log(`🔐 Connection attempt - Socket ID: ${socket.id}, Token present: ${!!token}`);
                 if (!token) {
                     this.logger.warn('❌ Connection rejected: No token provided');
                     return next(new Error('Authentication error: No token provided'));
@@ -61,14 +58,11 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
                         ...payload,
                         userId: payload.sub || payload.userId,
                     };
-                    this.logger.log(`✅ Token verified successfully:`);
-                    this.logger.log(`   - User ID: ${payload.sub || payload.userId}`);
-                    this.logger.log(`   - Email: ${payload.email}`);
+                    this.logger.log(`✅ Token verified - User ID: ${payload.sub || payload.userId}, Email: ${payload.email}`);
                     next();
                 }
                 catch (error) {
-                    this.logger.error(`❌ Token verification failed:`);
-                    this.logger.error(`   - Error: ${error.message}`);
+                    this.logger.error(`❌ Token verification failed: ${error.message}`);
                     return next(new Error(`Authentication error: ${error.message}`));
                 }
             }
@@ -82,9 +76,7 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
     async handleConnection(client) {
         try {
             const userId = client.data.user?.userId || client.data.user?.sub;
-            this.logger.log(`📥 New connection attempt:`);
-            this.logger.log(`   - Socket ID: ${client.id}`);
-            this.logger.log(`   - User ID: ${userId}`);
+            this.logger.log(`📥 New connection - Socket ID: ${client.id}, User ID: ${userId}`);
             if (!userId) {
                 this.logger.warn('❌ Connection rejected: No user data in socket.data');
                 client.emit('error', { message: 'Authentication failed: No user data' });
@@ -95,13 +87,8 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
                 this.userSockets.set(userId, new Set());
             }
             this.userSockets.get(userId).add(client.id);
-            this.logger.log(`✅ User ${userId} connected successfully`);
-            this.logger.log(`   - Socket ID: ${client.id}`);
-            this.logger.log(`   - Total sockets for user: ${this.userSockets.get(userId).size}`);
-            this.server.emit('user:status', {
-                userId,
-                status: 'online',
-            });
+            this.logger.log(`✅ User ${userId} connected (${this.userSockets.get(userId).size} sockets)`);
+            this.server.emit('user:status', { userId, status: 'online' });
             client.emit('connection:success', {
                 userId,
                 socketId: client.id,
@@ -118,20 +105,15 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
     async handleDisconnect(client) {
         try {
             const userId = client.data.user?.userId || client.data.user?.sub;
-            this.logger.log(`📤 Disconnection:`);
-            this.logger.log(`   - Socket ID: ${client.id}`);
-            this.logger.log(`   - User ID: ${userId}`);
+            this.logger.log(`📤 Disconnection - Socket ID: ${client.id}, User ID: ${userId}`);
             if (userId) {
                 const sockets = this.userSockets.get(userId);
                 if (sockets) {
                     sockets.delete(client.id);
                     if (sockets.size === 0) {
                         this.userSockets.delete(userId);
-                        this.server.emit('user:status', {
-                            userId,
-                            status: 'offline',
-                        });
-                        this.logger.log(`   - User ${userId} is now offline`);
+                        this.server.emit('user:status', { userId, status: 'offline' });
+                        this.logger.log(`   User ${userId} is now offline`);
                     }
                 }
             }
@@ -155,7 +137,7 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
     async handleSendMessage(client, data) {
         try {
             const userId = client.data.user.userId || client.data.user.sub;
-            this.logger.log(`📨 Sending message from user ${userId}`);
+            this.logger.log(`📨 Sending message from user ${userId}, tempId: ${data.tempId}`);
             const message = await this.chatService.sendMessage(userId, {
                 conversationId: data.conversationId,
                 content: data.content,
@@ -164,7 +146,12 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             this.server.to(`conversation:${data.conversationId}`).emit('message:new', {
                 message,
             });
-            client.emit('message:sent', { message });
+            client.emit('message:sent', {
+                message: {
+                    ...message,
+                    tempId: data.tempId,
+                },
+            });
             return { success: true, message };
         }
         catch (error) {
@@ -206,25 +193,20 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             this.logger.log(`📞 Call initiation from user ${userId}`);
             if (!dto.sdpOffer) {
                 this.logger.error('❌ No SDP offer provided in call initiation');
-                return {
-                    success: false,
-                    error: 'SDP offer is required to initiate a call'
-                };
+                return { success: false, error: 'SDP offer is required to initiate a call' };
             }
             const call = await this.callService.initiateCall(userId, dto);
             const conversation = await this.chatService.getConversation(dto.conversationId, userId);
             const recipientParticipant = conversation.participants.find(p => p.userId._id.toString() !== userId);
-            if (!recipientParticipant) {
+            if (!recipientParticipant)
                 throw new Error('Recipient not found');
-            }
             const recipientId = recipientParticipant.userId._id.toString();
             const initiatorUser = await this.userModel
                 .findById(userId)
                 .select('name profilePicture email')
                 .lean();
-            if (!initiatorUser) {
+            if (!initiatorUser)
                 throw new Error('Initiator user not found in database');
-            }
             const incomingCallData = {
                 call,
                 sdpOffer: dto.sdpOffer,
@@ -235,7 +217,6 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
                     email: initiatorUser.email,
                 },
             };
-            this.logger.log(`📤 Sending incoming call to recipient ${recipientId}`);
             this.emitToUser(recipientId, 'call:incoming', incomingCallData);
             await this.callService.setCallRinging(call._id.toString());
             this.logger.log(`✅ Call ${call._id} initiated successfully`);
@@ -251,7 +232,6 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             const userId = client.data.user.userId || client.data.user.sub;
             this.logger.log(`📞 User ${userId} answering call ${dto.callId}`);
             if (!dto.sdpAnswer) {
-                this.logger.error('❌ No SDP answer provided');
                 return { success: false, error: 'SDP answer is required' };
             }
             const call = await this.callService.answerCall(userId, dto);
@@ -270,7 +250,6 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
                 } : null,
             };
             const initiatorIdString = call.initiatorId.toString();
-            this.logger.log(`📤 Notifying initiator ${initiatorIdString} of answer`);
             this.emitToUser(initiatorIdString, 'call:answered', answerData);
             this.logger.log(`✅ Call ${dto.callId} answered successfully`);
             return { success: true, call };
@@ -290,7 +269,6 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
                 call,
                 reason: dto.reason,
             });
-            this.logger.log(`✅ Call ${dto.callId} declined`);
             return { success: true, call };
         }
         catch (error) {
@@ -305,14 +283,8 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             const call = await this.callService.endCall(userId, dto);
             const initiatorIdString = call.initiatorId.toString();
             const recipientIdString = call.recipientId.toString();
-            const otherUserId = initiatorIdString === userId
-                ? recipientIdString
-                : initiatorIdString;
-            this.emitToUser(otherUserId, 'call:ended', {
-                call,
-                reason: dto.reason,
-            });
-            this.logger.log(`✅ Call ${dto.callId} ended`);
+            const otherUserId = initiatorIdString === userId ? recipientIdString : initiatorIdString;
+            this.emitToUser(otherUserId, 'call:ended', { call, reason: dto.reason });
             return { success: true, call };
         }
         catch (error) {
@@ -326,15 +298,8 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             const call = await this.callService.setCallConnected(data.callId);
             const initiatorIdString = call.initiatorId.toString();
             const recipientIdString = call.recipientId.toString();
-            this.emitToUser(initiatorIdString, 'call:status', {
-                callId: data.callId,
-                status: 'connected',
-            });
-            this.emitToUser(recipientIdString, 'call:status', {
-                callId: data.callId,
-                status: 'connected',
-            });
-            this.logger.log(`✅ Call ${data.callId} connection confirmed`);
+            this.emitToUser(initiatorIdString, 'call:status', { callId: data.callId, status: 'connected' });
+            this.emitToUser(recipientIdString, 'call:status', { callId: data.callId, status: 'connected' });
             return { success: true, call };
         }
         catch (error) {
@@ -369,7 +334,6 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             const call = await this.callService.markCallAsMissed(data.callId);
             const initiatorIdString = call.initiatorId.toString();
             this.emitToUser(initiatorIdString, 'call:missed', { call });
-            this.logger.log(`✅ Call ${data.callId} missed notification sent`);
             return { success: true, call };
         }
         catch (error) {

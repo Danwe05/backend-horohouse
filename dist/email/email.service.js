@@ -180,19 +180,19 @@ let EmailService = EmailService_1 = class EmailService {
     async safeSendMail(options) {
         try {
             const transporter = await this.createTransporter();
-            const from = this.configService.get('EMAIL_FROM', `HoroHouse <no-reply@horohouse.com>`);
+            const from = this.configService.get('EMAIL_FROM', `HoroHouse <danwebasga05@gmail.com>`);
             const info = await transporter.sendMail({ from, ...options });
             const previewUrl = nodemailer.getTestMessageUrl?.(info);
             if (previewUrl)
                 this.logger.log(`Preview email: ${previewUrl}`);
         }
         catch (error) {
-            this.logger.error('Failed to send email', error);
+            this.logger.error(`Failed to send email: ${error.message}`, error.stack);
         }
     }
     async createTransporter() {
         const host = this.configService.get('SMTP_HOST');
-        const port = this.configService.get('SMTP_PORT');
+        const port = parseInt(this.configService.get('SMTP_PORT', '587'), 10);
         const user = this.configService.get('SMTP_USER');
         const pass = this.configService.get('SMTP_PASS');
         const secure = this.configService.get('SMTP_SECURE', 'false') === 'true';
