@@ -44,8 +44,8 @@ export declare class EmailService {
         currency: string;
         bookingId: string;
     }): Promise<void>;
+    private getResendClient;
     private safeSendMail;
-    private createTransporter;
     private layout;
     private btn;
     private display;

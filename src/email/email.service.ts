@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -315,50 +316,35 @@ export class EmailService {
 
 // ─── Transport ───────────────────────────────────────────────────────────────
 
+private getResendClient(): Resend {
+  const apiKey = this.configService.get<string>('RESEND_API_KEY');
+  if (!apiKey) throw new Error('RESEND_API_KEY is not configured');
+  return new Resend(apiKey);
+}
+
 private async safeSendMail(options: SendMailOptions): Promise<void> {
   this.logger.log(`Sending email to: ${options.to} | Subject: ${options.subject}`);
   try {
-    const transporter = await this.createTransporter();
-    const from = this.configService.get<string>('FROM_EMAIL', `HoroHouse <danwebasga05@gmail.com>`);
-    const info = await transporter.sendMail({ from, ...options });
-    this.logger.log(`✅ Email sent: ${info.messageId}`);
+    const resend = this.getResendClient();
+    const from = this.configService.get<string>('FROM_EMAIL', 'HoroHouse <onboarding@resend.dev>');
+    
+    const { data, error } = await resend.emails.send({
+      from,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+    });
 
-    // Only present when using Ethereal fallback
-    const previewUrl = nodemailer.getTestMessageUrl?.(info);
-    if (previewUrl) {
-      this.logger.warn(`⚠️ ETHEREAL FALLBACK — email NOT delivered to inbox. Preview: ${previewUrl}`);
+    if (error) {
+      this.logger.error(`❌ Resend error: ${error.message}`);
+      return;
     }
+
+    this.logger.log(`✅ Email sent: ${data?.id}`);
   } catch (error) {
     this.logger.error(`❌ Failed to send email: ${(error as Error).message}`, (error as Error).stack);
   }
-}
-
-private async createTransporter(): Promise<nodemailer.Transporter> {
-  const host = this.configService.get<string>('SMTP_HOST');
-  const port = parseInt(this.configService.get<string>('SMTP_PORT', '465'), 10);
-  const user = this.configService.get<string>('SMTP_USER');
-  const pass = this.configService.get<string>('SMTP_PASS');
-  // Use secure=true for port 465, false for 587
-  const secure = port === 465;
-
-  if (host && user && pass) {
-    this.logger.log(`Using SMTP: ${host}:${port} | secure: ${secure} | user: ${user}`);
-    return nodemailer.createTransport({
-      host,
-      port,
-      secure,
-      auth: { user, pass },
-    });
-  }
-
-  this.logger.warn('SMTP not configured — falling back to Ethereal. Emails will NOT be delivered.');
-  const testAccount = await nodemailer.createTestAccount();
-  return nodemailer.createTransport({
-    host: 'smtp.ethereal.email',
-    port: 587,
-    secure: false,
-    auth: { user: testAccount.user, pass: testAccount.pass },
-  });
 }
 
   // ─── Shared layout ───────────────────────────────────────────────────────────

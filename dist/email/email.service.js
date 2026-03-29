@@ -13,7 +13,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.EmailService = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
-const nodemailer = require("nodemailer");
+const resend_1 = require("resend");
 let EmailService = EmailService_1 = class EmailService {
     configService;
     logger = new common_1.Logger(EmailService_1.name);
@@ -177,45 +177,33 @@ let EmailService = EmailService_1 = class EmailService {
             html: this.buildHostNewBookingTemplate({ displayName, ...params }),
         });
     }
+    getResendClient() {
+        const apiKey = this.configService.get('RESEND_API_KEY');
+        if (!apiKey)
+            throw new Error('RESEND_API_KEY is not configured');
+        return new resend_1.Resend(apiKey);
+    }
     async safeSendMail(options) {
         this.logger.log(`Sending email to: ${options.to} | Subject: ${options.subject}`);
         try {
-            const transporter = await this.createTransporter();
-            const from = this.configService.get('FROM_EMAIL', `HoroHouse <danwebasga05@gmail.com>`);
-            const info = await transporter.sendMail({ from, ...options });
-            this.logger.log(`✅ Email sent: ${info.messageId}`);
-            const previewUrl = nodemailer.getTestMessageUrl?.(info);
-            if (previewUrl) {
-                this.logger.warn(`⚠️ ETHEREAL FALLBACK — email NOT delivered to inbox. Preview: ${previewUrl}`);
+            const resend = this.getResendClient();
+            const from = this.configService.get('FROM_EMAIL', 'HoroHouse <onboarding@resend.dev>');
+            const { data, error } = await resend.emails.send({
+                from,
+                to: options.to,
+                subject: options.subject,
+                html: options.html,
+                text: options.text,
+            });
+            if (error) {
+                this.logger.error(`❌ Resend error: ${error.message}`);
+                return;
             }
+            this.logger.log(`✅ Email sent: ${data?.id}`);
         }
         catch (error) {
             this.logger.error(`❌ Failed to send email: ${error.message}`, error.stack);
         }
-    }
-    async createTransporter() {
-        const host = this.configService.get('SMTP_HOST');
-        const port = parseInt(this.configService.get('SMTP_PORT', '465'), 10);
-        const user = this.configService.get('SMTP_USER');
-        const pass = this.configService.get('SMTP_PASS');
-        const secure = port === 465;
-        if (host && user && pass) {
-            this.logger.log(`Using SMTP: ${host}:${port} | secure: ${secure} | user: ${user}`);
-            return nodemailer.createTransport({
-                host,
-                port,
-                secure,
-                auth: { user, pass },
-            });
-        }
-        this.logger.warn('SMTP not configured — falling back to Ethereal. Emails will NOT be delivered.');
-        const testAccount = await nodemailer.createTestAccount();
-        return nodemailer.createTransport({
-            host: 'smtp.ethereal.email',
-            port: 587,
-            secure: false,
-            auth: { user: testAccount.user, pass: testAccount.pass },
-        });
     }
     layout(brandName, body, footer = '') {
         return `
