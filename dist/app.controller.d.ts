@@ -27,4 +27,13 @@ export declare class AppController {
         };
     }>;
     getHello(): string;
+    testEmail(): Promise<{
+        success: boolean;
+        messageId: any;
+        error?: undefined;
+    } | {
+        success: boolean;
+        error: any;
+        messageId?: undefined;
+    }>;
 }

@@ -25,6 +25,41 @@ let AppController = class AppController {
     getHello() {
         return this.appService.getHello();
     }
+    async testEmail() {
+        const nodemailer = require('nodemailer');
+        const config = {
+            host: process.env.SMTP_HOST,
+            port: parseInt(process.env.SMTP_PORT || '465'),
+            secure: parseInt(process.env.SMTP_PORT || '465') === 465,
+            auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS,
+            },
+        };
+        console.log('SMTP config:', {
+            host: config.host,
+            port: config.port,
+            secure: config.secure,
+            user: config.auth.user,
+            passLength: config.auth.pass?.length ?? 0,
+        });
+        try {
+            const transporter = nodemailer.createTransport(config);
+            await transporter.verify();
+            console.log('✅ SMTP connection verified');
+            const info = await transporter.sendMail({
+                from: process.env.SMTP_USER,
+                to: process.env.SMTP_USER,
+                subject: 'HoroHouse SMTP Test',
+                text: 'If you see this, SMTP is working on Railway.',
+            });
+            return { success: true, messageId: info.messageId };
+        }
+        catch (err) {
+            console.error('❌ SMTP error:', err.message);
+            return { success: false, error: err.message };
+        }
+    }
 };
 exports.AppController = AppController;
 __decorate([
@@ -45,6 +80,12 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", String)
 ], AppController.prototype, "getHello", null);
+__decorate([
+    (0, common_1.Get)('test-email'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AppController.prototype, "testEmail", null);
 exports.AppController = AppController = __decorate([
     (0, swagger_1.ApiTags)('Health'),
     (0, common_1.Controller)(),
