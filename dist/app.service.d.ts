@@ -27,4 +27,13 @@ export declare class AppService {
             };
         };
     }>;
+    testEmail(): Promise<{
+        success: boolean;
+        messageId: any;
+        error?: undefined;
+    } | {
+        success: boolean;
+        error: any;
+        messageId?: undefined;
+    }>;
 }
