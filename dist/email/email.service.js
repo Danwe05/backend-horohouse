@@ -418,6 +418,29 @@ let EmailService = EmailService_1 = class EmailService {
       ${this.btn(`${this.frontendUrl}/hosting/bookings/${p.bookingId}`, 'Review Request')}
     `);
     }
+    async sendNewsletterWelcome(recipientEmail) {
+        await this.safeSendMail({
+            to: recipientEmail,
+            subject: `Welcome to the ${this.brandName} Newsletter!`,
+            text: `Thanks for subscribing! You'll now receive the latest property listings and exclusive deals from ${this.brandName}.`,
+            html: this.layout(this.brandName, `
+      <h2 style="margin-top:0;">You're on the list! 🎉</h2>
+      <p style="line-height:1.6;">Thanks for subscribing to the <strong>${this.brandName}</strong> newsletter.</p>
+      <p style="line-height:1.6;">You'll be the first to hear about:</p>
+      <ul style="line-height:1.8;padding-left:20px;">
+        <li>New property listings across Africa</li>
+        <li>Exclusive deals and price drops</li>
+        <li>Market insights and real estate tips</li>
+      </ul>
+      <div style="margin-top:24px;">${this.btn(this.frontendUrl, 'Browse Properties')}</div>
+      <p style="margin-top:24px;font-size:13px;color:#64748b;">
+        You can unsubscribe at any time by clicking 
+        <a href="${this.frontendUrl}/unsubscribe?email=${recipientEmail}" style="color:#2563eb;">here</a>.
+      </p>
+      <p style="margin-top:8px;">— The ${this.brandName} Team</p>
+    `),
+        });
+    }
 };
 exports.EmailService = EmailService;
 exports.EmailService = EmailService = EmailService_1 = __decorate([

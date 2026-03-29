@@ -38,6 +38,7 @@ import { StudentPropertiesModule } from './student-properties/student-properties
 import { SplitPaymentsModule } from './split-payments/split-payments.module';
 import { DigitalLeaseModule } from './digital-lease/digital-lease.module';
 import { RoommateMatchingModule } from './roommate/roommate.module';
+import { NewsletterModule } from './newsletter/newsletter.module';
 
 @Module({
   imports: [
@@ -97,7 +98,8 @@ import { RoommateMatchingModule } from './roommate/roommate.module';
     StudentPropertiesModule,
     SplitPaymentsModule,
     DigitalLeaseModule,
-    RoommateMatchingModule
+    RoommateMatchingModule,
+    NewsletterModule,
   ],
 
   controllers: [AppController],

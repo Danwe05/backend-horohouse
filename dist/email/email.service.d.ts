@@ -61,4 +61,5 @@ export declare class EmailService {
     private buildBookingConfirmationTemplate;
     private buildPaymentRequestTemplate;
     private buildHostNewBookingTemplate;
+    sendNewsletterWelcome(recipientEmail: string): Promise<void>;
 }

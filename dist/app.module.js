@@ -43,6 +43,7 @@ const student_properties_module_1 = require("./student-properties/student-proper
 const split_payments_module_1 = require("./split-payments/split-payments.module");
 const digital_lease_module_1 = require("./digital-lease/digital-lease.module");
 const roommate_module_1 = require("./roommate/roommate.module");
+const newsletter_module_1 = require("./newsletter/newsletter.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -103,7 +104,8 @@ exports.AppModule = AppModule = __decorate([
             student_properties_module_1.StudentPropertiesModule,
             split_payments_module_1.SplitPaymentsModule,
             digital_lease_module_1.DigitalLeaseModule,
-            roommate_module_1.RoommateMatchingModule
+            roommate_module_1.RoommateMatchingModule,
+            newsletter_module_1.NewsletterModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [
