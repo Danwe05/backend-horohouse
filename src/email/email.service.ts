@@ -58,7 +58,7 @@ interface PropertyWarningTemplateParams extends BaseTemplateParams {
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly configService: ConfigService) { }
 
   // ─── Config helpers ──────────────────────────────────────────────────────────
 
@@ -71,7 +71,7 @@ export class EmailService {
   }
 
   private get apiUrl(): string {
-    return this.configService.get<string>('API_URL', 'https://api.horohouse.com');
+    return this.configService.get<string>('API_URL', 'https://backend-horohouse-production-c006.up.railway.app');
   }
 
   private get supportEmail(): string {
@@ -313,41 +313,53 @@ export class EmailService {
     });
   }
 
-  // ─── Transport ───────────────────────────────────────────────────────────────
+// ─── Transport ───────────────────────────────────────────────────────────────
 
-  private async safeSendMail(options: SendMailOptions): Promise<void> {
-    try {
-      const transporter = await this.createTransporter();
-      const from = this.configService.get<string>('EMAIL_FROM', `HoroHouse <danwebasga05@gmail.com>`);
-      const info = await transporter.sendMail({ from, ...options });
+private async safeSendMail(options: SendMailOptions): Promise<void> {
+  this.logger.log(`Sending email to: ${options.to} | Subject: ${options.subject}`);
+  try {
+    const transporter = await this.createTransporter();
+    const from = this.configService.get<string>('FROM_EMAIL', `HoroHouse <danwebasga05@gmail.com>`);
+    const info = await transporter.sendMail({ from, ...options });
+    this.logger.log(`✅ Email sent: ${info.messageId}`);
 
-      const previewUrl = nodemailer.getTestMessageUrl?.(info);
-      if (previewUrl) this.logger.log(`Preview email: ${previewUrl}`);
-    } catch (error) {
-      this.logger.error(`Failed to send email: ${(error as Error).message}`, (error as Error).stack);
+    // Only present when using Ethereal fallback
+    const previewUrl = nodemailer.getTestMessageUrl?.(info);
+    if (previewUrl) {
+      this.logger.warn(`⚠️ ETHEREAL FALLBACK — email NOT delivered to inbox. Preview: ${previewUrl}`);
     }
+  } catch (error) {
+    this.logger.error(`❌ Failed to send email: ${(error as Error).message}`, (error as Error).stack);
   }
+}
 
-  private async createTransporter(): Promise<nodemailer.Transporter> {
-    const host = this.configService.get<string>('SMTP_HOST');
-    const port = parseInt(this.configService.get<string>('SMTP_PORT', '587'), 10);
-    const user = this.configService.get<string>('SMTP_USER');
-    const pass = this.configService.get<string>('SMTP_PASS');
-    const secure = this.configService.get<string>('SMTP_SECURE', 'false') === 'true';
+private async createTransporter(): Promise<nodemailer.Transporter> {
+  const host = this.configService.get<string>('SMTP_HOST');
+  const port = parseInt(this.configService.get<string>('SMTP_PORT', '465'), 10);
+  const user = this.configService.get<string>('SMTP_USER');
+  const pass = this.configService.get<string>('SMTP_PASS');
+  // Use secure=true for port 465, false for 587
+  const secure = port === 465;
 
-    if (host && port && user && pass) {
-      return nodemailer.createTransport({ host, port: Number(port), secure, auth: { user, pass } });
-    }
-
-    this.logger.warn('SMTP not configured — falling back to Ethereal test account. Emails will NOT be delivered.');
-    const testAccount = await nodemailer.createTestAccount();
+  if (host && user && pass) {
+    this.logger.log(`Using SMTP: ${host}:${port} | secure: ${secure} | user: ${user}`);
     return nodemailer.createTransport({
-      host: 'smtp.ethereal.email',
-      port: 587,
-      secure: false,
-      auth: { user: testAccount.user, pass: testAccount.pass },
+      host,
+      port,
+      secure,
+      auth: { user, pass },
     });
   }
+
+  this.logger.warn('SMTP not configured — falling back to Ethereal. Emails will NOT be delivered.');
+  const testAccount = await nodemailer.createTestAccount();
+  return nodemailer.createTransport({
+    host: 'smtp.ethereal.email',
+    port: 587,
+    secure: false,
+    auth: { user: testAccount.user, pass: testAccount.pass },
+  });
+}
 
   // ─── Shared layout ───────────────────────────────────────────────────────────
 
@@ -530,8 +542,8 @@ export class EmailService {
       </div>
       <p style="font-size:14px;color:#475569;line-height:1.6;">
         ${p.isFinal
-          ? 'Please take <strong>immediate action</strong>. Continued non-compliance may result in permanent removal of your listing.'
-          : 'Please review your listing and make the necessary updates to comply with our community guidelines.'}
+        ? 'Please take <strong>immediate action</strong>. Continued non-compliance may result in permanent removal of your listing.'
+        : 'Please review your listing and make the necessary updates to comply with our community guidelines.'}
       </p>
       <div style="margin-top:24px;">
         ${this.btn(`${p.frontendUrl}/dashboard/properties`, 'Review My Listings')}
@@ -539,7 +551,7 @@ export class EmailService {
       </div>
       <p style="margin-top:24px;">— The ${p.brandName} Trust &amp; Safety Team</p>
     `, `<p style="margin:0;">This message was sent because a report was filed against one of your listings on ${p.brandName}.</p>`,
-    // severity banner injected via wrapper override below
+      // severity banner injected via wrapper override below
     );
   }
 

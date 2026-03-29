@@ -27,7 +27,7 @@ let EmailService = EmailService_1 = class EmailService {
         return this.configService.get('FRONTEND_URL', 'https://horohouse.com');
     }
     get apiUrl() {
-        return this.configService.get('API_URL', 'https://api.horohouse.com');
+        return this.configService.get('API_URL', 'https://backend-horohouse-production-c006.up.railway.app');
     }
     get supportEmail() {
         return this.configService.get('SUPPORT_EMAIL', 'support@horohouse.com');
@@ -178,28 +178,37 @@ let EmailService = EmailService_1 = class EmailService {
         });
     }
     async safeSendMail(options) {
+        this.logger.log(`Sending email to: ${options.to} | Subject: ${options.subject}`);
         try {
             const transporter = await this.createTransporter();
-            const from = this.configService.get('EMAIL_FROM', `HoroHouse <danwebasga05@gmail.com>`);
+            const from = this.configService.get('FROM_EMAIL', `HoroHouse <danwebasga05@gmail.com>`);
             const info = await transporter.sendMail({ from, ...options });
+            this.logger.log(`✅ Email sent: ${info.messageId}`);
             const previewUrl = nodemailer.getTestMessageUrl?.(info);
-            if (previewUrl)
-                this.logger.log(`Preview email: ${previewUrl}`);
+            if (previewUrl) {
+                this.logger.warn(`⚠️ ETHEREAL FALLBACK — email NOT delivered to inbox. Preview: ${previewUrl}`);
+            }
         }
         catch (error) {
-            this.logger.error(`Failed to send email: ${error.message}`, error.stack);
+            this.logger.error(`❌ Failed to send email: ${error.message}`, error.stack);
         }
     }
     async createTransporter() {
         const host = this.configService.get('SMTP_HOST');
-        const port = parseInt(this.configService.get('SMTP_PORT', '587'), 10);
+        const port = parseInt(this.configService.get('SMTP_PORT', '465'), 10);
         const user = this.configService.get('SMTP_USER');
         const pass = this.configService.get('SMTP_PASS');
-        const secure = this.configService.get('SMTP_SECURE', 'false') === 'true';
-        if (host && port && user && pass) {
-            return nodemailer.createTransport({ host, port: Number(port), secure, auth: { user, pass } });
+        const secure = port === 465;
+        if (host && user && pass) {
+            this.logger.log(`Using SMTP: ${host}:${port} | secure: ${secure} | user: ${user}`);
+            return nodemailer.createTransport({
+                host,
+                port,
+                secure,
+                auth: { user, pass },
+            });
         }
-        this.logger.warn('SMTP not configured — falling back to Ethereal test account. Emails will NOT be delivered.');
+        this.logger.warn('SMTP not configured — falling back to Ethereal. Emails will NOT be delivered.');
         const testAccount = await nodemailer.createTestAccount();
         return nodemailer.createTransport({
             host: 'smtp.ethereal.email',
