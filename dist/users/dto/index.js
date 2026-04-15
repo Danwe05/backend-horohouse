@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UpdateTenantDto = exports.CreateTenantDto = exports.UserStatsDto = exports.PaginatedAgentsResponseDto = exports.AgentResponseDto = exports.AgentStatsDto = exports.PaginatedUsersResponseDto = exports.UserResponseDto = exports.GetUsersQueryDto = exports.SearchQueryDto = exports.UpdatePreferencesDto = exports.UpdateUserDto = exports.CreateUserDto = exports.UserPreferencesDto = exports.GetViewedPropertiesDto = exports.LocationDto = void 0;
+exports.RecordHostPayoutDto = exports.VerifyHostDto = exports.UpdateHostProfileDto = exports.PayoutAccountDto = exports.SetRoleDto = exports.UpdateTenantDto = exports.CreateTenantDto = exports.UserStatsDto = exports.PaginatedAgentsResponseDto = exports.AgentResponseDto = exports.AgentStatsDto = exports.PaginatedUsersResponseDto = exports.UserResponseDto = exports.GetUsersQueryDto = exports.SearchQueryDto = exports.UpdatePreferencesDto = exports.UpdateUserDto = exports.CreateUserDto = exports.UserPreferencesDto = exports.GetViewedPropertiesDto = exports.LocationDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 const swagger_1 = require("@nestjs/swagger");
@@ -715,6 +715,12 @@ class UserStatsDto {
     total;
     active;
     agents;
+    landlords;
+    hosts;
+    students;
+    guests;
+    superhosts;
+    pendingHostVerifications;
     verified;
     recent;
     byRole;
@@ -733,6 +739,30 @@ __decorate([
     __metadata("design:type", Number)
 ], UserStatsDto.prototype, "agents", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 30 }),
+    __metadata("design:type", Number)
+], UserStatsDto.prototype, "landlords", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 20 }),
+    __metadata("design:type", Number)
+], UserStatsDto.prototype, "hosts", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 80 }),
+    __metadata("design:type", Number)
+], UserStatsDto.prototype, "students", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 40 }),
+    __metadata("design:type", Number)
+], UserStatsDto.prototype, "guests", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 5 }),
+    __metadata("design:type", Number)
+], UserStatsDto.prototype, "superhosts", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 3 }),
+    __metadata("design:type", Number)
+], UserStatsDto.prototype, "pendingHostVerifications", void 0);
+__decorate([
     (0, swagger_1.ApiProperty)({ example: 1200 }),
     __metadata("design:type", Number)
 ], UserStatsDto.prototype, "verified", void 0);
@@ -745,8 +775,11 @@ __decorate([
         example: {
             registered_user: 1400,
             agent: 50,
-            admin: 5
-        }
+            landlord: 30,
+            host: 20,
+            student: 80,
+            guest: 40,
+        },
     }),
     __metadata("design:type", Object)
 ], UserStatsDto.prototype, "byRole", void 0);
@@ -915,4 +948,268 @@ __decorate([
     (0, class_validator_1.Length)(0, 1000),
     __metadata("design:type", String)
 ], UpdateTenantDto.prototype, "notes", void 0);
+class SetRoleDto {
+    role;
+}
+exports.SetRoleDto = SetRoleDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        enum: user_schema_1.UserRole,
+        example: user_schema_1.UserRole.HOST,
+        description: 'Target role to assign. ADMIN cannot be set via this endpoint.',
+    }),
+    (0, class_validator_1.IsEnum)(user_schema_1.UserRole),
+    __metadata("design:type", String)
+], SetRoleDto.prototype, "role", void 0);
+class PayoutAccountDto {
+    method;
+    accountIdentifier;
+    providerName;
+    isDefault;
+    currency;
+}
+exports.PayoutAccountDto = PayoutAccountDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ enum: user_schema_1.PayoutMethod, example: user_schema_1.PayoutMethod.MOBILE_MONEY }),
+    (0, class_validator_1.IsEnum)(user_schema_1.PayoutMethod),
+    __metadata("design:type", String)
+], PayoutAccountDto.prototype, "method", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '+237670000000', description: 'Phone / account number / PayPal email' }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(3, 100),
+    __metadata("design:type", String)
+], PayoutAccountDto.prototype, "accountIdentifier", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'MTN Cameroon' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(2, 80),
+    __metadata("design:type", String)
+], PayoutAccountDto.prototype, "providerName", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: true, description: 'Mark as the default payout method' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], PayoutAccountDto.prototype, "isDefault", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'XAF', description: 'ISO 4217 currency code' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(3, 3),
+    __metadata("design:type", String)
+], PayoutAccountDto.prototype, "currency", void 0);
+class UpdateHostProfileDto {
+    instantBookEnabled;
+    minNightsDefault;
+    maxNightsDefault;
+    advanceNoticeHours;
+    bookingWindowMonths;
+    petsAllowedDefault;
+    smokingAllowedDefault;
+    eventsAllowedDefault;
+    checkInTimeDefault;
+    checkOutTimeDefault;
+    addPayoutAccount;
+    removePayoutAccountIdentifier;
+    addCoHostId;
+    removeCoHostId;
+    hostBio;
+    hostLanguages;
+    operatingCity;
+}
+exports.UpdateHostProfileDto = UpdateHostProfileDto;
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: true }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpdateHostProfileDto.prototype, "instantBookEnabled", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 1, description: 'Min nights (default 1)' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(1),
+    __metadata("design:type", Number)
+], UpdateHostProfileDto.prototype, "minNightsDefault", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 0, description: 'Max nights (0 = no cap)' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpdateHostProfileDto.prototype, "maxNightsDefault", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 24, description: 'Advance notice in hours before check-in' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpdateHostProfileDto.prototype, "advanceNoticeHours", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 12, description: 'Months ahead the calendar stays open (0 = no limit)' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpdateHostProfileDto.prototype, "bookingWindowMonths", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: false }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpdateHostProfileDto.prototype, "petsAllowedDefault", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: false }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpdateHostProfileDto.prototype, "smokingAllowedDefault", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: false }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpdateHostProfileDto.prototype, "eventsAllowedDefault", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: '15:00', description: '24 h check-in time, e.g. "15:00"' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'Must be HH:MM in 24-hour format' }),
+    __metadata("design:type", String)
+], UpdateHostProfileDto.prototype, "checkInTimeDefault", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: '11:00', description: '24 h check-out time' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'Must be HH:MM in 24-hour format' }),
+    __metadata("design:type", String)
+], UpdateHostProfileDto.prototype, "checkOutTimeDefault", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ type: PayoutAccountDto, description: 'Add a new payout account' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.ValidateNested)(),
+    (0, class_transformer_1.Type)(() => PayoutAccountDto),
+    __metadata("design:type", PayoutAccountDto)
+], UpdateHostProfileDto.prototype, "addPayoutAccount", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({
+        example: '+237670000000',
+        description: 'accountIdentifier of the payout account to remove',
+    }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpdateHostProfileDto.prototype, "removePayoutAccountIdentifier", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: '507f1f77bcf86cd799439011', description: 'User ID to add as co-host' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(24, 24, { message: 'Must be a valid 24-character ObjectId' }),
+    __metadata("design:type", String)
+], UpdateHostProfileDto.prototype, "addCoHostId", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: '507f1f77bcf86cd799439011', description: 'User ID to remove from co-hosts' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(24, 24, { message: 'Must be a valid 24-character ObjectId' }),
+    __metadata("design:type", String)
+], UpdateHostProfileDto.prototype, "removeCoHostId", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'Passionate host in Douala with 3 cosy apartments.' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(0, 1000),
+    __metadata("design:type", String)
+], UpdateHostProfileDto.prototype, "hostBio", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: ['fr', 'en'], description: 'ISO 639-1 language codes spoken by the host' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsString)({ each: true }),
+    __metadata("design:type", Array)
+], UpdateHostProfileDto.prototype, "hostLanguages", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'Douala' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(2, 80),
+    __metadata("design:type", String)
+], UpdateHostProfileDto.prototype, "operatingCity", void 0);
+class VerifyHostDto {
+    decision;
+    rejectionReason;
+}
+exports.VerifyHostDto = VerifyHostDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ enum: ['approve', 'reject'], example: 'approve' }),
+    (0, class_validator_1.IsIn)(['approve', 'reject']),
+    __metadata("design:type", String)
+], VerifyHostDto.prototype, "decision", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'ID document was expired.' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(1, 500),
+    __metadata("design:type", String)
+], VerifyHostDto.prototype, "rejectionReason", void 0);
+class RecordHostPayoutDto {
+    amount;
+    currency;
+    method;
+    reference;
+    status;
+    initiatedAt;
+    completedAt;
+    failureReason;
+}
+exports.RecordHostPayoutDto = RecordHostPayoutDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 55000, description: 'Gross payout amount' }),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], RecordHostPayoutDto.prototype, "amount", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'XAF', description: 'ISO 4217 currency code' }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(3, 3),
+    __metadata("design:type", String)
+], RecordHostPayoutDto.prototype, "currency", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ enum: user_schema_1.PayoutMethod, example: user_schema_1.PayoutMethod.MOBILE_MONEY }),
+    (0, class_validator_1.IsEnum)(user_schema_1.PayoutMethod),
+    __metadata("design:type", String)
+], RecordHostPayoutDto.prototype, "method", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'BOOKING-2026-001', description: 'Booking or period reference' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(1, 100),
+    __metadata("design:type", String)
+], RecordHostPayoutDto.prototype, "reference", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ enum: ['pending', 'processing', 'paid', 'failed'], example: 'paid' }),
+    (0, class_validator_1.IsIn)(['pending', 'processing', 'paid', 'failed']),
+    __metadata("design:type", String)
+], RecordHostPayoutDto.prototype, "status", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '2026-04-13T00:00:00.000Z' }),
+    (0, class_transformer_1.Type)(() => Date),
+    __metadata("design:type", Date)
+], RecordHostPayoutDto.prototype, "initiatedAt", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: '2026-04-14T00:00:00.000Z' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Date),
+    __metadata("design:type", Date)
+], RecordHostPayoutDto.prototype, "completedAt", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'Insufficient balance.' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(1, 300),
+    __metadata("design:type", String)
+], RecordHostPayoutDto.prototype, "failureReason", void 0);
 //# sourceMappingURL=index.js.map

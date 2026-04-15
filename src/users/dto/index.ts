@@ -8,6 +8,7 @@ import {
   IsNumber,
   IsArray,
   IsObject,
+  IsDate,
   ValidateNested,
   Min,
   Max,
@@ -18,7 +19,7 @@ import {
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { UserRole } from '../schemas/user.schema';
+import { UserRole, PayoutMethod } from '../schemas/user.schema';
 
 // Location DTO for geospatial data
 export class LocationDto {
@@ -561,6 +562,24 @@ export class UserStatsDto {
   @ApiProperty({ example: 50 })
   agents: number;
 
+  @ApiProperty({ example: 30 })
+  landlords: number;
+
+  @ApiProperty({ example: 20 })
+  hosts: number;
+
+  @ApiProperty({ example: 80 })
+  students: number;
+
+  @ApiProperty({ example: 40 })
+  guests: number;
+
+  @ApiProperty({ example: 5 })
+  superhosts: number;
+
+  @ApiProperty({ example: 3 })
+  pendingHostVerifications: number;
+
   @ApiProperty({ example: 1200 })
   verified: number;
 
@@ -571,8 +590,11 @@ export class UserStatsDto {
     example: {
       registered_user: 1400,
       agent: 50,
-      admin: 5
-    }
+      landlord: 30,
+      host: 20,
+      student: 80,
+      guest: 40,
+    },
   })
   byRole: Record<string, number>;
 }
@@ -702,4 +724,222 @@ export class UpdateTenantDto {
   @IsString()
   @Length(0, 1000)
   notes?: string;
+}
+
+// ==========================================
+// HOST DTOs
+// ==========================================
+
+/**
+ * Body for PATCH /users/me/role — explicitly set the caller's role.
+ */
+export class SetRoleDto {
+  @ApiProperty({
+    enum: UserRole,
+    example: UserRole.HOST,
+    description: 'Target role to assign. ADMIN cannot be set via this endpoint.',
+  })
+  @IsEnum(UserRole)
+  role: UserRole;
+}
+
+/**
+ * Nested DTO for a single payout account entry.
+ */
+export class PayoutAccountDto {
+  @ApiProperty({ enum: PayoutMethod, example: PayoutMethod.MOBILE_MONEY })
+  @IsEnum(PayoutMethod)
+  method: PayoutMethod;
+
+  @ApiProperty({ example: '+237670000000', description: 'Phone / account number / PayPal email' })
+  @IsString()
+  @Length(3, 100)
+  accountIdentifier: string;
+
+  @ApiPropertyOptional({ example: 'MTN Cameroon' })
+  @IsOptional()
+  @IsString()
+  @Length(2, 80)
+  providerName?: string;
+
+  @ApiPropertyOptional({ example: true, description: 'Mark as the default payout method' })
+  @IsOptional()
+  @IsBoolean()
+  isDefault?: boolean;
+
+  @ApiPropertyOptional({ example: 'XAF', description: 'ISO 4217 currency code' })
+  @IsOptional()
+  @IsString()
+  @Length(3, 3)
+  currency?: string;
+}
+
+/**
+ * PATCH /users/hosts/:id/profile
+ * All fields are optional — only supplied fields are written.
+ */
+export class UpdateHostProfileDto {
+  // ── Booking preferences ───────────────────────────────────────────────
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  instantBookEnabled?: boolean;
+
+  @ApiPropertyOptional({ example: 1, description: 'Min nights (default 1)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  minNightsDefault?: number;
+
+  @ApiPropertyOptional({ example: 0, description: 'Max nights (0 = no cap)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxNightsDefault?: number;
+
+  @ApiPropertyOptional({ example: 24, description: 'Advance notice in hours before check-in' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  advanceNoticeHours?: number;
+
+  @ApiPropertyOptional({ example: 12, description: 'Months ahead the calendar stays open (0 = no limit)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  bookingWindowMonths?: number;
+
+  // ── House rules ───────────────────────────────────────────────────────
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  petsAllowedDefault?: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  smokingAllowedDefault?: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  eventsAllowedDefault?: boolean;
+
+  @ApiPropertyOptional({ example: '15:00', description: '24 h check-in time, e.g. "15:00"' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'Must be HH:MM in 24-hour format' })
+  checkInTimeDefault?: string;
+
+  @ApiPropertyOptional({ example: '11:00', description: '24 h check-out time' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'Must be HH:MM in 24-hour format' })
+  checkOutTimeDefault?: string;
+
+  // ── Payout account operations ─────────────────────────────────────────
+  @ApiPropertyOptional({ type: PayoutAccountDto, description: 'Add a new payout account' })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PayoutAccountDto)
+  addPayoutAccount?: PayoutAccountDto;
+
+  @ApiPropertyOptional({
+    example: '+237670000000',
+    description: 'accountIdentifier of the payout account to remove',
+  })
+  @IsOptional()
+  @IsString()
+  removePayoutAccountIdentifier?: string;
+
+  // ── Co-host operations ────────────────────────────────────────────────
+  @ApiPropertyOptional({ example: '507f1f77bcf86cd799439011', description: 'User ID to add as co-host' })
+  @IsOptional()
+  @IsString()
+  @Length(24, 24, { message: 'Must be a valid 24-character ObjectId' })
+  addCoHostId?: string;
+
+  @ApiPropertyOptional({ example: '507f1f77bcf86cd799439011', description: 'User ID to remove from co-hosts' })
+  @IsOptional()
+  @IsString()
+  @Length(24, 24, { message: 'Must be a valid 24-character ObjectId' })
+  removeCoHostId?: string;
+
+  // ── Bio / presentation ────────────────────────────────────────────────
+  @ApiPropertyOptional({ example: 'Passionate host in Douala with 3 cosy apartments.' })
+  @IsOptional()
+  @IsString()
+  @Length(0, 1000)
+  hostBio?: string;
+
+  @ApiPropertyOptional({ example: ['fr', 'en'], description: 'ISO 639-1 language codes spoken by the host' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  hostLanguages?: string[];
+
+  @ApiPropertyOptional({ example: 'Douala' })
+  @IsOptional()
+  @IsString()
+  @Length(2, 80)
+  operatingCity?: string;
+}
+
+/**
+ * PATCH /users/hosts/:id/verify (Admin only)
+ */
+export class VerifyHostDto {
+  @ApiProperty({ enum: ['approve', 'reject'], example: 'approve' })
+  @IsIn(['approve', 'reject'])
+  decision: 'approve' | 'reject';
+
+  @ApiPropertyOptional({ example: 'ID document was expired.' })
+  @IsOptional()
+  @IsString()
+  @Length(1, 500)
+  rejectionReason?: string;
+}
+
+/**
+ * POST /users/hosts/:id/payouts (Admin / payments service only)
+ */
+export class RecordHostPayoutDto {
+  @ApiProperty({ example: 55000, description: 'Gross payout amount' })
+  @IsNumber()
+  @Min(0)
+  amount: number;
+
+  @ApiProperty({ example: 'XAF', description: 'ISO 4217 currency code' })
+  @IsString()
+  @Length(3, 3)
+  currency: string;
+
+  @ApiProperty({ enum: PayoutMethod, example: PayoutMethod.MOBILE_MONEY })
+  @IsEnum(PayoutMethod)
+  method: PayoutMethod;
+
+  @ApiPropertyOptional({ example: 'BOOKING-2026-001', description: 'Booking or period reference' })
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  reference?: string;
+
+  @ApiProperty({ enum: ['pending', 'processing', 'paid', 'failed'], example: 'paid' })
+  @IsIn(['pending', 'processing', 'paid', 'failed'])
+  status: 'pending' | 'processing' | 'paid' | 'failed';
+
+  @ApiProperty({ example: '2026-04-13T00:00:00.000Z' })
+  @Type(() => Date)
+  initiatedAt: Date;
+
+  @ApiPropertyOptional({ example: '2026-04-14T00:00:00.000Z' })
+  @IsOptional()
+  @Type(() => Date)
+  completedAt?: Date;
+
+  @ApiPropertyOptional({ example: 'Insufficient balance.' })
+  @IsOptional()
+  @IsString()
+  @Length(1, 300)
+  failureReason?: string;
 }

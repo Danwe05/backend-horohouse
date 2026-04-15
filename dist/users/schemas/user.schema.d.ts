@@ -4,9 +4,71 @@ export declare enum UserRole {
     ADMIN = "admin",
     AGENT = "agent",
     LANDLORD = "landlord",
+    HOST = "host",
     REGISTERED_USER = "registered_user",
     GUEST = "guest",
     STUDENT = "student"
+}
+export declare enum HostVerificationStatus {
+    UNVERIFIED = "unverified",
+    PENDING = "pending",
+    VERIFIED = "verified",
+    REJECTED = "rejected"
+}
+export declare enum PayoutMethod {
+    MOBILE_MONEY = "mobile_money",
+    BANK_TRANSFER = "bank_transfer",
+    PAYPAL = "paypal"
+}
+export interface HostPayoutAccount {
+    method: PayoutMethod;
+    accountIdentifier: string;
+    providerName?: string;
+    isDefault: boolean;
+    currency: string;
+}
+export interface HostPayoutRecord {
+    _id?: Types.ObjectId;
+    amount: number;
+    currency: string;
+    method: PayoutMethod;
+    reference?: string;
+    status: 'pending' | 'processing' | 'paid' | 'failed';
+    initiatedAt: Date;
+    completedAt?: Date;
+    failureReason?: string;
+}
+export interface HostProfile {
+    verificationStatus: HostVerificationStatus;
+    governmentIdUrl?: string;
+    governmentIdPublicId?: string;
+    verificationSubmittedAt?: Date;
+    verificationReviewedAt?: Date;
+    verificationRejectionReason?: string;
+    isSuperhost: boolean;
+    superhostSince?: Date;
+    instantBookEnabled: boolean;
+    minNightsDefault: number;
+    maxNightsDefault: number;
+    advanceNoticeHours: number;
+    bookingWindowMonths: number;
+    responseRate?: number;
+    responseTimeMinutes?: number;
+    totalEarnings: number;
+    currentMonthEarnings: number;
+    completedStays: number;
+    commissionRate: number;
+    payoutAccounts: HostPayoutAccount[];
+    payoutHistory: HostPayoutRecord[];
+    petsAllowedDefault: boolean;
+    smokingAllowedDefault: boolean;
+    eventsAllowedDefault: boolean;
+    checkInTimeDefault?: string;
+    checkOutTimeDefault?: string;
+    coHostIds: Types.ObjectId[];
+    hostBio?: string;
+    hostLanguages: string[];
+    operatingCity?: string;
 }
 export declare enum StudentVerificationStatus {
     UNVERIFIED = "unverified",
@@ -141,6 +203,7 @@ export declare class User {
     tenants: TenantRecord[];
     totalRentalIncome?: number;
     occupancyRate?: number;
+    hostProfile?: HostProfile;
     studentProfile?: StudentProfile;
     emailNotifications: boolean;
     smsNotifications: boolean;

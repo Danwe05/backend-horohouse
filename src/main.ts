@@ -20,8 +20,8 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:8081',
   'http://localhost:8082',
-  'http://10.227.167.37:8081',
-  'http://10.187.122.37:8081',
+  'http://10.48.115.37:8081',
+  'http://10.48.115.37:8082',
 ];
 
 const CORS_OPTIONS = {

@@ -1,17 +1,27 @@
 import { Document, Types } from 'mongoose';
 export type SubscriptionDocument = Subscription & Document;
 export declare enum BillingCycle {
+    WEEKLY = "weekly",
     MONTHLY = "monthly",
     QUARTERLY = "quarterly",
     YEARLY = "yearly"
 }
 export declare enum SubscriptionPlan {
-    FREE = "free",
-    BASIC = "basic",
-    PREMIUM = "premium",
-    PROFESSIONAL = "professional",
-    AGENCY = "agency",
-    ENTERPRISE = "enterprise"
+    STUDENT_FREE = "student_free",
+    USER_FREE = "user_free",
+    USER_PREMIUM = "user_premium",
+    AGENT_FREE = "agent_free",
+    AGENT_BASIC = "agent_basic",
+    AGENT_PRO = "agent_pro",
+    AGENT_ELITE = "agent_elite",
+    LANDLORD_FREE = "landlord_free",
+    LANDLORD_BASIC = "landlord_basic",
+    LANDLORD_PRO = "landlord_pro",
+    HOST_FREE = "host_free",
+    HOST_STARTER = "host_starter",
+    HOST_GROWTH = "host_growth",
+    HOST_PRO = "host_pro",
+    HOST_ELITE = "host_elite"
 }
 export declare enum SubscriptionStatus {
     PENDING = "pending",
@@ -35,6 +45,14 @@ export type SubscriptionFeatures = {
     socialMediaIntegration?: boolean;
     leadGeneration?: boolean;
     whiteLabel?: boolean;
+    role?: 'landlord' | 'agent' | 'student' | 'user' | 'host';
+    maxProperties?: number;
+    bookingCalendar?: boolean;
+    shortTermRentalSupport?: boolean;
+    smartPricing?: boolean;
+    maintenanceTracking?: boolean;
+    premiumVisibility?: boolean;
+    dedicatedSupport?: boolean;
     [key: string]: any;
 };
 export declare class Subscription {
@@ -55,6 +73,7 @@ export declare class Subscription {
     lastPaymentDate?: Date;
     cancelledAt?: Date;
     cancellationReason?: string;
+    scheduledCancellationDate?: Date;
     previousSubscriptionId?: Types.ObjectId;
     upgradedFrom?: SubscriptionPlan;
     providerSubscriptionId?: string;

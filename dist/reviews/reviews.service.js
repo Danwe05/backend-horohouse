@@ -66,7 +66,7 @@ let ReviewsService = ReviewsService_1 = class ReviewsService {
         if (dto.agentId) {
             const agent = await this.userModel.findOne({
                 _id: dto.agentId,
-                role: { $in: [user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD] },
+                role: { $in: [user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD] },
                 isActive: true,
             });
             if (!agent)

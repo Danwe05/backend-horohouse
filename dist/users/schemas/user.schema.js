@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UserSchema = exports.User = exports.StudentVerificationStatus = exports.UserRole = void 0;
+exports.UserSchema = exports.User = exports.StudentVerificationStatus = exports.PayoutMethod = exports.HostVerificationStatus = exports.UserRole = void 0;
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 var UserRole;
@@ -17,10 +17,24 @@ var UserRole;
     UserRole["ADMIN"] = "admin";
     UserRole["AGENT"] = "agent";
     UserRole["LANDLORD"] = "landlord";
+    UserRole["HOST"] = "host";
     UserRole["REGISTERED_USER"] = "registered_user";
     UserRole["GUEST"] = "guest";
     UserRole["STUDENT"] = "student";
 })(UserRole || (exports.UserRole = UserRole = {}));
+var HostVerificationStatus;
+(function (HostVerificationStatus) {
+    HostVerificationStatus["UNVERIFIED"] = "unverified";
+    HostVerificationStatus["PENDING"] = "pending";
+    HostVerificationStatus["VERIFIED"] = "verified";
+    HostVerificationStatus["REJECTED"] = "rejected";
+})(HostVerificationStatus || (exports.HostVerificationStatus = HostVerificationStatus = {}));
+var PayoutMethod;
+(function (PayoutMethod) {
+    PayoutMethod["MOBILE_MONEY"] = "mobile_money";
+    PayoutMethod["BANK_TRANSFER"] = "bank_transfer";
+    PayoutMethod["PAYPAL"] = "paypal";
+})(PayoutMethod || (exports.PayoutMethod = PayoutMethod = {}));
 var StudentVerificationStatus;
 (function (StudentVerificationStatus) {
     StudentVerificationStatus["UNVERIFIED"] = "unverified";
@@ -66,6 +80,7 @@ let User = class User {
     tenants;
     totalRentalIncome;
     occupancyRate;
+    hostProfile;
     studentProfile;
     emailNotifications;
     smsNotifications;
@@ -274,6 +289,78 @@ __decorate([
 __decorate([
     (0, mongoose_1.Prop)({
         type: {
+            verificationStatus: {
+                type: String,
+                enum: Object.values(HostVerificationStatus),
+                default: HostVerificationStatus.UNVERIFIED,
+            },
+            governmentIdUrl: { type: String },
+            governmentIdPublicId: { type: String },
+            verificationSubmittedAt: { type: Date },
+            verificationReviewedAt: { type: Date },
+            verificationRejectionReason: { type: String },
+            isSuperhost: { type: Boolean, default: false },
+            superhostSince: { type: Date },
+            instantBookEnabled: { type: Boolean, default: false },
+            minNightsDefault: { type: Number, default: 1 },
+            maxNightsDefault: { type: Number, default: 0 },
+            advanceNoticeHours: { type: Number, default: 24 },
+            bookingWindowMonths: { type: Number, default: 12 },
+            responseRate: { type: Number },
+            responseTimeMinutes: { type: Number },
+            totalEarnings: { type: Number, default: 0 },
+            currentMonthEarnings: { type: Number, default: 0 },
+            completedStays: { type: Number, default: 0 },
+            commissionRate: { type: Number, default: 0.12 },
+            payoutAccounts: {
+                type: [
+                    {
+                        method: { type: String, enum: Object.values(PayoutMethod), required: true },
+                        accountIdentifier: { type: String, required: true },
+                        providerName: { type: String },
+                        isDefault: { type: Boolean, default: false },
+                        currency: { type: String, default: 'XAF' },
+                    },
+                ],
+                default: [],
+            },
+            payoutHistory: {
+                type: [
+                    {
+                        _id: { type: mongoose_2.Types.ObjectId, default: () => new mongoose_2.Types.ObjectId() },
+                        amount: { type: Number, required: true },
+                        currency: { type: String, required: true },
+                        method: { type: String, enum: Object.values(PayoutMethod), required: true },
+                        reference: { type: String },
+                        status: {
+                            type: String,
+                            enum: ['pending', 'processing', 'paid', 'failed'],
+                            default: 'pending',
+                        },
+                        initiatedAt: { type: Date, required: true },
+                        completedAt: { type: Date },
+                        failureReason: { type: String },
+                    },
+                ],
+                default: [],
+            },
+            petsAllowedDefault: { type: Boolean, default: false },
+            smokingAllowedDefault: { type: Boolean, default: false },
+            eventsAllowedDefault: { type: Boolean, default: false },
+            checkInTimeDefault: { type: String, default: '15:00' },
+            checkOutTimeDefault: { type: String, default: '11:00' },
+            coHostIds: { type: [{ type: mongoose_2.Types.ObjectId, ref: 'User' }], default: [] },
+            hostBio: { type: String },
+            hostLanguages: { type: [String], default: [] },
+            operatingCity: { type: String },
+        },
+        default: null,
+    }),
+    __metadata("design:type", Object)
+], User.prototype, "hostProfile", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({
+        type: {
             universityName: { type: String },
             faculty: { type: String },
             studyLevel: { type: String },
@@ -364,6 +451,10 @@ exports.UserSchema.index({ role: 1 });
 exports.UserSchema.index({ city: 1 });
 exports.UserSchema.index({ country: 1 });
 exports.UserSchema.index({ isActive: 1 });
+exports.UserSchema.index({ 'hostProfile.verificationStatus': 1 });
+exports.UserSchema.index({ 'hostProfile.isSuperhost': 1 });
+exports.UserSchema.index({ 'hostProfile.payoutHistory.status': 1 });
+exports.UserSchema.index({ role: 1, 'hostProfile.operatingCity': 1 });
 exports.UserSchema.index({ 'studentProfile.verificationStatus': 1 });
 exports.UserSchema.index({ 'studentProfile.ambassadorCode': 1 }, { sparse: true });
 exports.UserSchema.index({ 'studentProfile.roommateProfileId': 1 }, { sparse: true });
@@ -380,6 +471,9 @@ exports.UserSchema.set('toJSON', {
         delete ret.phoneVerificationCode;
         delete ret.emailVerificationToken;
         delete ret.resetPasswordToken;
+        if (ret.hostProfile?.governmentIdPublicId) {
+            delete ret.hostProfile.governmentIdPublicId;
+        }
         if (ret.studentProfile?.studentIdPublicId) {
             delete ret.studentProfile.studentIdPublicId;
         }

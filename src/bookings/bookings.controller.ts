@@ -46,7 +46,7 @@ export class BookingsController {
   // ════════════════════════════════════════════════════════════════════════════
 
   @Post()
-  @Roles(UserRole.REGISTERED_USER, UserRole.GUEST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.REGISTERED_USER, UserRole.GUEST, UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Request a booking for a short-term property' })
   @ApiResponse({ status: 201, description: 'Booking created (pending or instantly confirmed)' })
@@ -60,7 +60,7 @@ export class BookingsController {
   }
 
   @Get('my')
-  @Roles(UserRole.REGISTERED_USER, UserRole.GUEST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.REGISTERED_USER, UserRole.GUEST, UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get the current user's bookings (as guest)" })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -78,7 +78,7 @@ export class BookingsController {
   }
 
   @Patch(':id/cancel')
-  @Roles(UserRole.REGISTERED_USER, UserRole.GUEST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.REGISTERED_USER, UserRole.GUEST, UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel a booking (guest, host, or admin)' })
@@ -99,7 +99,7 @@ export class BookingsController {
   // ════════════════════════════════════════════════════════════════════════════
 
   @Get('hosting')
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all bookings for properties you host' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -117,7 +117,7 @@ export class BookingsController {
   }
 
   @Patch(':id/confirm')
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Host confirms a pending booking' })
@@ -134,7 +134,7 @@ export class BookingsController {
   }
 
   @Patch(':id/reject')
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Host rejects a pending booking' })
@@ -149,7 +149,7 @@ export class BookingsController {
   }
 
   @Patch(':id/complete')
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Host marks a stay as completed after checkout' })
@@ -189,7 +189,7 @@ export class BookingsController {
   }
 
   @Get('property/:propertyId')
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all bookings for a specific property (host / admin only)' })
   @ApiParam({ name: 'propertyId', description: 'Property ID' })
@@ -250,7 +250,7 @@ export class BookingsController {
   // ════════════════════════════════════════════════════════════════════════════
 
   @Get(':id')
-  @Roles(UserRole.REGISTERED_USER, UserRole.GUEST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.REGISTERED_USER, UserRole.GUEST, UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get booking details (guest, host, or admin)' })
   @ApiParam({ name: 'id', description: 'Booking ID' })

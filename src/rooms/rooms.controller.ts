@@ -47,7 +47,7 @@ export class RoomsController {
     // ════════════════════════════════════════════════════════════════════════════
 
     @Post()
-    @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Create a room for a hotel/hostel/motel property' })
     @ApiResponse({ status: 201, description: 'Room created' })
@@ -84,7 +84,7 @@ export class RoomsController {
     }
 
     @Patch(':id')
-    @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Update a room' })
     @ApiParam({ name: 'id', description: 'Room ID' })
@@ -98,7 +98,7 @@ export class RoomsController {
     }
 
     @Delete(':id')
-    @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiBearerAuth()
     @HttpCode(HttpStatus.NO_CONTENT)
     @ApiOperation({ summary: 'Soft-delete a room (marks isActive = false)' })
@@ -116,7 +116,7 @@ export class RoomsController {
     // ════════════════════════════════════════════════════════════════════════════
 
     @Post(':id/images')
-    @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Upload images to a specific room' })
     @ApiParam({ name: 'id', description: 'Room ID' })
@@ -142,7 +142,7 @@ export class RoomsController {
     }
 
     @Delete(':id/images/:imageId')
-    @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Delete a specific room image' })
     @ApiParam({ name: 'id', description: 'Room ID' })
@@ -164,7 +164,7 @@ export class RoomsController {
     // ════════════════════════════════════════════════════════════════════════════
 
     @Post(':id/block-dates')
-    @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiBearerAuth()
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Block date ranges on a specific room (manual)' })
@@ -179,7 +179,7 @@ export class RoomsController {
     }
 
     @Post(':id/unblock-dates')
-    @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiBearerAuth()
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Unblock manually blocked date ranges from a room' })
@@ -198,7 +198,7 @@ export class RoomsController {
     // ════════════════════════════════════════════════════════════════════════════
 
     @Patch(':id/ical-url')
-    @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiBearerAuth()
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Set the iCal feed URL for a room (Airbnb, Booking.com, etc.)' })
@@ -213,7 +213,7 @@ export class RoomsController {
     }
 
     @Post(':id/sync-ical')
-    @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiBearerAuth()
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Manually trigger iCal sync for a room' })

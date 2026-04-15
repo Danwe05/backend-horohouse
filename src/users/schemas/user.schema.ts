@@ -10,12 +10,170 @@ export enum UserRole {
   AGENT = 'agent',
   /** Property owner managing long-term rentals (leases, tenants, rental income). */
   LANDLORD = 'landlord',
+  /**
+   * Property owner managing short-term stays (nightly / weekly bookings).
+   * Mirrors the Airbnb "Host" model — the owner self-lists and handles
+   * their own availability, pricing, and guest communication.
+   */
+  HOST = 'host',
   /** Default role for any registered user browsing or inquiring on listings. */
   REGISTERED_USER = 'registered_user',
   /** User who books short-term stays (hotels, vacation rentals, featured houses). */
   GUEST = 'guest',
   /** University student — access to student housing search, roommate matching, and student-verified listings. */
   STUDENT = 'student',
+}
+
+// ─── Host profile ─────────────────────────────────────────────────────────────
+
+/**
+ * Verification tier for a host — mirrors Airbnb's Superhost / verified host concept.
+ */
+export enum HostVerificationStatus {
+  /** Account created, identity not yet confirmed. */
+  UNVERIFIED = 'unverified',
+  /** ID / documents uploaded, under review. */
+  PENDING = 'pending',
+  /** Identity confirmed — host can publish listings and accept bookings. */
+  VERIFIED = 'verified',
+  /** Documents rejected (expired, wrong type, unreadable). */
+  REJECTED = 'rejected',
+}
+
+/**
+ * Payout method types supported for host earnings disbursement.
+ */
+export enum PayoutMethod {
+  MOBILE_MONEY = 'mobile_money', // MTN / Orange Money (primary in Cameroon & West Africa)
+  BANK_TRANSFER = 'bank_transfer',
+  PAYPAL = 'paypal',
+}
+
+/**
+ * Stored payout destination for a host.
+ */
+export interface HostPayoutAccount {
+  method: PayoutMethod;
+  /** Phone number for mobile money, account number for bank, email for PayPal. */
+  accountIdentifier: string;
+  /** e.g. "MTN Cameroon", "Orange Money", "UBA" */
+  providerName?: string;
+  isDefault: boolean;
+  /** ISO 4217 currency code the account receives in, e.g. "XAF" */
+  currency: string;
+}
+
+/**
+ * Snapshot of a completed payout to the host.
+ */
+export interface HostPayoutRecord {
+  _id?: Types.ObjectId;
+  amount: number;
+  currency: string;
+  method: PayoutMethod;
+  /** Booking or period this payout covers */
+  reference?: string;
+  status: 'pending' | 'processing' | 'paid' | 'failed';
+  initiatedAt: Date;
+  completedAt?: Date;
+  failureReason?: string;
+}
+
+/**
+ * Sub-profile attached to a user with role === HOST.
+ *
+ * Design rationale (Airbnb-aligned):
+ *  - Identity verification gate  → hosts must be verified before listings go live.
+ *  - Superhost tier              → earned automatically from performance metrics.
+ *  - Instant-book toggle         → host-level default, overridable per listing.
+ *  - Response metrics            → drive search ranking and trust signals.
+ *  - Payout accounts             → mobile-money-first for the African market.
+ *  - Earnings summary            → lifetime + current-month snapshot.
+ */
+export interface HostProfile {
+  // ── Identity verification ────────────────────────────────────────────────
+  verificationStatus: HostVerificationStatus;
+  /** Cloudinary URL of the host's government-issued ID. */
+  governmentIdUrl?: string;
+  /** Cloudinary public_id (kept server-side only, stripped from API responses). */
+  governmentIdPublicId?: string;
+  verificationSubmittedAt?: Date;
+  verificationReviewedAt?: Date;
+  verificationRejectionReason?: string;
+
+  // ── Superhost ────────────────────────────────────────────────────────────
+  /**
+   * True when the host consistently meets high performance thresholds
+   * (response rate ≥ 90 %, rating ≥ 4.8, ≥ 10 stays in 12 months, <1 % cancellation).
+   * Re-evaluated automatically every quarter.
+   */
+  isSuperhost: boolean;
+  superhostSince?: Date;
+
+  // ── Hosting preferences ──────────────────────────────────────────────────
+  /**
+   * When true, guests matching the host's requirements can book instantly
+   * without waiting for manual approval. Mirrors Airbnb's Instant Book.
+   */
+  instantBookEnabled: boolean;
+  /** Minimum length of stay in nights (e.g. 1 = nightly, 7 = weekly minimum). */
+  minNightsDefault: number;
+  /** Maximum length of stay in nights (0 = no cap). */
+  maxNightsDefault: number;
+  /**
+   * Advance notice the host needs before a guest can check in (in hours).
+   * e.g. 0 = same-day OK, 24 = at least 1 day notice.
+   */
+  advanceNoticeHours: number;
+  /**
+   * How far into the future the host keeps their calendar open for bookings.
+   * Values: 3 | 6 | 9 | 12 months, or 0 = no limit.
+   */
+  bookingWindowMonths: number;
+
+  // ── Response metrics ─────────────────────────────────────────────────────
+  /** Percentage of inquiries responded to within 24 h (0–100). */
+  responseRate?: number;
+  /** Median time to first response in minutes. */
+  responseTimeMinutes?: number;
+
+  // ── Financials ───────────────────────────────────────────────────────────
+  /** Total gross earnings across all bookings, lifetime (in XAF or platform base currency). */
+  totalEarnings: number;
+  /** Earnings in the current calendar month (reset on 1st). */
+  currentMonthEarnings: number;
+  /** Number of completed stays (bookings that checked out successfully). */
+  completedStays: number;
+  /** Platform commission rate applied to this host's payouts (0–1, e.g. 0.12 = 12 %). */
+  commissionRate: number;
+  /** Registered payout destinations. */
+  payoutAccounts: HostPayoutAccount[];
+  /** Last 50 payout records for display in the host dashboard. */
+  payoutHistory: HostPayoutRecord[];
+
+  // ── House rules (host-level defaults, overridable per listing) ────────────
+  petsAllowedDefault: boolean;
+  smokingAllowedDefault: boolean;
+  eventsAllowedDefault: boolean;
+  /** Default check-in window start, 24 h format e.g. "15:00" */
+  checkInTimeDefault?: string;
+  /** Default check-out time, 24 h format e.g. "11:00" */
+  checkOutTimeDefault?: string;
+
+  // ── Co-hosts ─────────────────────────────────────────────────────────────
+  /**
+   * Other user IDs granted co-host access (can manage calendar, messages, and
+   * check-in/out on behalf of the primary host).
+   */
+  coHostIds: Types.ObjectId[];
+
+  // ── Bio / presentation ───────────────────────────────────────────────────
+  /** Short "About me" shown on the host's public profile page. */
+  hostBio?: string;
+  /** Primary spoken language used with guests (ISO 639-1 codes, e.g. ["fr","en"]). */
+  hostLanguages: string[];
+  /** City/region the host primarily operates in. */
+  operatingCity?: string;
 }
 
 // ─── Student verification status ─────────────────────────────────────────────
@@ -311,11 +469,102 @@ export class User {
   @Prop({ default: 0 })
   occupancyRate?: number;
 
-  // ── Student-specific fields (NEW) ─────────────────────────────────────────
+  // ── Host-specific fields ──────────────────────────────────────────────────
+
+  /**
+   * Only populated when role === UserRole.HOST.
+   * Follows the same embedded sub-profile pattern as studentProfile.
+   */
+  @Prop({
+    type: {
+      // Identity verification
+      verificationStatus: {
+        type: String,
+        enum: Object.values(HostVerificationStatus),
+        default: HostVerificationStatus.UNVERIFIED,
+      },
+      governmentIdUrl: { type: String },
+      governmentIdPublicId: { type: String },
+      verificationSubmittedAt: { type: Date },
+      verificationReviewedAt: { type: Date },
+      verificationRejectionReason: { type: String },
+
+      // Superhost
+      isSuperhost: { type: Boolean, default: false },
+      superhostSince: { type: Date },
+
+      // Hosting preferences
+      instantBookEnabled: { type: Boolean, default: false },
+      minNightsDefault: { type: Number, default: 1 },
+      maxNightsDefault: { type: Number, default: 0 },
+      advanceNoticeHours: { type: Number, default: 24 },
+      bookingWindowMonths: { type: Number, default: 12 },
+
+      // Response metrics
+      responseRate: { type: Number },
+      responseTimeMinutes: { type: Number },
+
+      // Financials
+      totalEarnings: { type: Number, default: 0 },
+      currentMonthEarnings: { type: Number, default: 0 },
+      completedStays: { type: Number, default: 0 },
+      commissionRate: { type: Number, default: 0.12 }, // 12 % platform cut
+      payoutAccounts: {
+        type: [
+          {
+            method: { type: String, enum: Object.values(PayoutMethod), required: true },
+            accountIdentifier: { type: String, required: true },
+            providerName: { type: String },
+            isDefault: { type: Boolean, default: false },
+            currency: { type: String, default: 'XAF' },
+          },
+        ],
+        default: [],
+      },
+      payoutHistory: {
+        type: [
+          {
+            _id: { type: Types.ObjectId, default: () => new Types.ObjectId() },
+            amount: { type: Number, required: true },
+            currency: { type: String, required: true },
+            method: { type: String, enum: Object.values(PayoutMethod), required: true },
+            reference: { type: String },
+            status: {
+              type: String,
+              enum: ['pending', 'processing', 'paid', 'failed'],
+              default: 'pending',
+            },
+            initiatedAt: { type: Date, required: true },
+            completedAt: { type: Date },
+            failureReason: { type: String },
+          },
+        ],
+        default: [],
+      },
+
+      // House rules defaults
+      petsAllowedDefault: { type: Boolean, default: false },
+      smokingAllowedDefault: { type: Boolean, default: false },
+      eventsAllowedDefault: { type: Boolean, default: false },
+      checkInTimeDefault: { type: String, default: '15:00' },
+      checkOutTimeDefault: { type: String, default: '11:00' },
+
+      // Co-hosts
+      coHostIds: { type: [{ type: Types.ObjectId, ref: 'User' }], default: [] },
+
+      // Bio / presentation
+      hostBio: { type: String },
+      hostLanguages: { type: [String], default: [] },
+      operatingCity: { type: String },
+    },
+    default: null,
+  })
+  hostProfile?: HostProfile;
+
+  // ── Student-specific fields ───────────────────────────────────────────────
 
   /**
    * Only populated when role === UserRole.STUDENT.
-   * Follows the same pattern as agentPreferences.
    */
   @Prop({
     type: {
@@ -416,14 +665,20 @@ UserSchema.index({ city: 1 });
 UserSchema.index({ country: 1 });
 UserSchema.index({ isActive: 1 });
 
-// Student-specific indexes (NEW)
-// Fast lookup for admin verification queue
+// Host-specific indexes
+// Admin verification queue
+UserSchema.index({ 'hostProfile.verificationStatus': 1 });
+// Superhost filter for search ranking
+UserSchema.index({ 'hostProfile.isSuperhost': 1 });
+// Payout processing queue — find hosts with pending payouts
+UserSchema.index({ 'hostProfile.payoutHistory.status': 1 });
+// Hosts by city for ops/support filtering
+UserSchema.index({ role: 1, 'hostProfile.operatingCity': 1 });
+
+// Student-specific indexes
 UserSchema.index({ 'studentProfile.verificationStatus': 1 });
-// Fast lookup for ambassador code redemption
 UserSchema.index({ 'studentProfile.ambassadorCode': 1 }, { sparse: true });
-// Fast lookup for roommate profile linking
 UserSchema.index({ 'studentProfile.roommateProfileId': 1 }, { sparse: true });
-// Filter students by campus city for roommate matching
 UserSchema.index({ role: 1, 'studentProfile.campusCity': 1 });
 
 // Virtual id getter
@@ -441,7 +696,11 @@ UserSchema.set('toJSON', {
     delete ret.phoneVerificationCode;
     delete ret.emailVerificationToken;
     delete ret.resetPasswordToken;
-    // Strip student ID Cloudinary public_id from API responses
+    // Strip host government ID Cloudinary public_id
+    if (ret.hostProfile?.governmentIdPublicId) {
+      delete ret.hostProfile.governmentIdPublicId;
+    }
+    // Strip student ID Cloudinary public_id
     if (ret.studentProfile?.studentIdPublicId) {
       delete ret.studentProfile.studentIdPublicId;
     }

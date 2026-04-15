@@ -30,7 +30,7 @@ import { ReviewType } from './schemas/review.schema';
 @Controller('reviews')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ReviewsController {
-  constructor(private readonly reviewsService: ReviewsService) {}
+  constructor(private readonly reviewsService: ReviewsService) { }
 
   // ════════════════════════════════════════════════════════════════════════════
   // CREATE
@@ -61,34 +61,34 @@ export class ReviewsController {
   @Get()
   @Public()
   @ApiOperation({ summary: 'Get all reviews with filters' })
-  @ApiQuery({ name: 'page',           required: false, type: Number })
-  @ApiQuery({ name: 'limit',          required: false, type: Number })
-  @ApiQuery({ name: 'reviewType',     required: false, enum: ReviewType })
-  @ApiQuery({ name: 'propertyId',     required: false, type: String })
-  @ApiQuery({ name: 'agentId',        required: false, type: String })
-  @ApiQuery({ name: 'bookingId',      required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'reviewType', required: false, enum: ReviewType })
+  @ApiQuery({ name: 'propertyId', required: false, type: String })
+  @ApiQuery({ name: 'agentId', required: false, type: String })
+  @ApiQuery({ name: 'bookingId', required: false, type: String })
   @ApiQuery({ name: 'reviewedUserId', required: false, type: String })
-  @ApiQuery({ name: 'minRating',      required: false, type: Number })
-  @ApiQuery({ name: 'maxRating',      required: false, type: Number })
-  @ApiQuery({ name: 'verified',       required: false, type: Boolean })
-  @ApiQuery({ name: 'sortBy',         required: false, type: String })
-  @ApiQuery({ name: 'sortOrder',      required: false, enum: ['asc', 'desc'] })
+  @ApiQuery({ name: 'minRating', required: false, type: Number })
+  @ApiQuery({ name: 'maxRating', required: false, type: Number })
+  @ApiQuery({ name: 'verified', required: false, type: Boolean })
+  @ApiQuery({ name: 'sortBy', required: false, type: String })
+  @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
   @ApiResponse({ status: 200, description: 'Reviews retrieved' })
   async findAll(@Query() query: any) {
     const filters = {
-      reviewType:     query.reviewType,
-      propertyId:     query.propertyId,
-      agentId:        query.agentId,
-      bookingId:      query.bookingId,
+      reviewType: query.reviewType,
+      propertyId: query.propertyId,
+      agentId: query.agentId,
+      bookingId: query.bookingId,
       reviewedUserId: query.reviewedUserId,
-      minRating:      query.minRating ? parseFloat(query.minRating) : undefined,
-      maxRating:      query.maxRating ? parseFloat(query.maxRating) : undefined,
-      verified:       query.verified === 'true' ? true : query.verified === 'false' ? false : undefined,
+      minRating: query.minRating ? parseFloat(query.minRating) : undefined,
+      maxRating: query.maxRating ? parseFloat(query.maxRating) : undefined,
+      verified: query.verified === 'true' ? true : query.verified === 'false' ? false : undefined,
     };
     const options = {
-      page:      query.page      ? parseInt(query.page)  : 1,
-      limit:     query.limit     ? parseInt(query.limit) : 20,
-      sortBy:    query.sortBy    || 'createdAt',
+      page: query.page ? parseInt(query.page) : 1,
+      limit: query.limit ? parseInt(query.limit) : 20,
+      sortBy: query.sortBy || 'createdAt',
       sortOrder: query.sortOrder || 'desc',
     };
     return this.reviewsService.findAll(filters, options);
@@ -98,15 +98,15 @@ export class ReviewsController {
   @Public()
   @ApiOperation({ summary: 'Get reviews for a property (includes stay reviews)' })
   @ApiParam({ name: 'propertyId' })
-  @ApiQuery({ name: 'page',      required: false, type: Number })
-  @ApiQuery({ name: 'limit',     required: false, type: Number })
-  @ApiQuery({ name: 'sortBy',    required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'sortBy', required: false, type: String })
   @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
   async getPropertyReviews(@Param('propertyId') propertyId: string, @Query() query: any) {
     return this.reviewsService.getPropertyReviews(propertyId, {
-      page:      query.page      ? parseInt(query.page)  : 1,
-      limit:     query.limit     ? parseInt(query.limit) : 20,
-      sortBy:    query.sortBy    || 'createdAt',
+      page: query.page ? parseInt(query.page) : 1,
+      limit: query.limit ? parseInt(query.limit) : 20,
+      sortBy: query.sortBy || 'createdAt',
       sortOrder: query.sortOrder || 'desc',
     });
   }
@@ -123,15 +123,15 @@ export class ReviewsController {
   @Public()
   @ApiOperation({ summary: 'Get reviews for an agent' })
   @ApiParam({ name: 'agentId' })
-  @ApiQuery({ name: 'page',      required: false, type: Number })
-  @ApiQuery({ name: 'limit',     required: false, type: Number })
-  @ApiQuery({ name: 'sortBy',    required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'sortBy', required: false, type: String })
   @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
   async getAgentReviews(@Param('agentId') agentId: string, @Query() query: any) {
     return this.reviewsService.getAgentReviews(agentId, {
-      page:      query.page      ? parseInt(query.page)  : 1,
-      limit:     query.limit     ? parseInt(query.limit) : 20,
-      sortBy:    query.sortBy    || 'createdAt',
+      page: query.page ? parseInt(query.page) : 1,
+      limit: query.limit ? parseInt(query.limit) : 20,
+      sortBy: query.sortBy || 'createdAt',
       sortOrder: query.sortOrder || 'desc',
     });
   }
@@ -174,14 +174,14 @@ export class ReviewsController {
   @Public()
   @ApiOperation({ summary: 'Get reviews received by a user as a guest' })
   @ApiParam({ name: 'userId', description: 'User ID' })
-  @ApiQuery({ name: 'page',      required: false, type: Number })
-  @ApiQuery({ name: 'limit',     required: false, type: Number })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
   @ApiResponse({ status: 200, description: 'Guest reputation reviews' })
   async getGuestReviews(@Param('userId') userId: string, @Query() query: any) {
     return this.reviewsService.getGuestReviews(userId, {
-      page:      query.page      ? parseInt(query.page)  : 1,
-      limit:     query.limit     ? parseInt(query.limit) : 20,
+      page: query.page ? parseInt(query.page) : 1,
+      limit: query.limit ? parseInt(query.limit) : 20,
       sortOrder: query.sortOrder || 'desc',
     });
   }
@@ -193,13 +193,13 @@ export class ReviewsController {
   @Get('my-reviews')
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get current user's reviews" })
-  @ApiQuery({ name: 'page',  required: false, type: Number })
+  @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   async getMyReviews(@Req() req: any, @Query() query: any) {
     return this.reviewsService.getUserReviews(req.user.id, {
-      page:      query.page  ? parseInt(query.page)  : 1,
-      limit:     query.limit ? parseInt(query.limit) : 20,
-      sortBy:    query.sortBy    || 'createdAt',
+      page: query.page ? parseInt(query.page) : 1,
+      limit: query.limit ? parseInt(query.limit) : 20,
+      sortBy: query.sortBy || 'createdAt',
       sortOrder: query.sortOrder || 'desc',
     });
   }
@@ -226,7 +226,7 @@ export class ReviewsController {
   }
 
   @Post(':id/respond')
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Respond to a review (host, agent, or admin)' })
   @ApiParam({ name: 'id' })

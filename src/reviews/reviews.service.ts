@@ -44,11 +44,11 @@ export class ReviewsService {
   private readonly logger = new Logger(ReviewsService.name);
 
   constructor(
-    @InjectModel(Review.name)    private reviewModel:    Model<ReviewDocument>,
-    @InjectModel(Property.name)  private propertyModel:  Model<PropertyDocument>,
-    @InjectModel(User.name)      private userModel:      Model<UserDocument>,
-    @InjectModel(Booking.name)   private bookingModel:   Model<BookingDocument>,
-  ) {}
+    @InjectModel(Review.name) private reviewModel: Model<ReviewDocument>,
+    @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,
+  ) { }
 
   // ════════════════════════════════════════════════════════════════════════════
   // CREATE
@@ -104,23 +104,23 @@ export class ReviewsService {
     if (dto.agentId) {
       const agent = await this.userModel.findOne({
         _id: dto.agentId,
-        role: { $in: [UserRole.AGENT, UserRole.LANDLORD] },
+        role: { $in: [UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD] },
         isActive: true,
       });
       if (!agent) throw new NotFoundException('Agent not found');
     }
 
     const review = new this.reviewModel({
-      userId:     user._id,
-      userName:   user.name,
+      userId: user._id,
+      userName: user.name,
       reviewType: dto.reviewType,
       reviewerRole: ReviewerRole.GUEST,
       propertyId: dto.propertyId ? new Types.ObjectId(dto.propertyId) : undefined,
-      agentId:    dto.agentId    ? new Types.ObjectId(dto.agentId)    : undefined,
-      rating:     dto.rating,
-      comment:    dto.comment,
-      images:     dto.images ?? [],
-      verified:   true,
+      agentId: dto.agentId ? new Types.ObjectId(dto.agentId) : undefined,
+      rating: dto.rating,
+      comment: dto.comment,
+      images: dto.images ?? [],
+      verified: true,
       bookingVerified: false,
       isPublished: true,   // standard reviews are immediately visible
     });
@@ -129,7 +129,7 @@ export class ReviewsService {
 
     // Update denormalized ratings on the target document
     if (dto.propertyId) await this.updatePropertyRating(dto.propertyId);
-    if (dto.agentId)    await this.updateAgentRating(dto.agentId);
+    if (dto.agentId) await this.updateAgentRating(dto.agentId);
 
     this.logger.log(`Standard review created: ${saved._id} by user ${user._id}`);
     return saved;
@@ -163,7 +163,7 @@ export class ReviewsService {
 
     // ── 2. Determine reviewer role and validate caller identity ──────────────
     const isGuest = booking.guestId.toString() === user._id.toString();
-    const isHost  = booking.hostId.toString()  === user._id.toString();
+    const isHost = booking.hostId.toString() === user._id.toString();
 
     if (dto.reviewType === ReviewType.STAY && !isGuest) {
       throw new ForbiddenException(
@@ -193,9 +193,9 @@ export class ReviewsService {
       : ReviewerRole.HOST;
 
     const alreadyReviewed = await this.reviewModel.findOne({
-      bookingId:    new Types.ObjectId(dto.bookingId),
+      bookingId: new Types.ObjectId(dto.bookingId),
       reviewerRole,
-      isActive:     true,
+      isActive: true,
     });
     if (alreadyReviewed) {
       throw new BadRequestException(
@@ -213,9 +213,9 @@ export class ReviewsService {
       : ReviewerRole.GUEST;
 
     const otherReview = await this.reviewModel.findOne({
-      bookingId:    new Types.ObjectId(dto.bookingId),
+      bookingId: new Types.ObjectId(dto.bookingId),
       reviewerRole: otherRole,
-      isActive:     true,
+      isActive: true,
     });
 
     // Both sides reviewed → publish immediately; otherwise hold
@@ -225,23 +225,23 @@ export class ReviewsService {
     const propertyId = (booking.propertyId as any)?._id ?? booking.propertyId;
 
     const review = new this.reviewModel({
-      userId:       user._id,
-      userName:     user.name,
-      reviewType:   dto.reviewType,
+      userId: user._id,
+      userName: user.name,
+      reviewType: dto.reviewType,
       reviewerRole,
-      propertyId:   dto.reviewType === ReviewType.STAY ? propertyId : undefined,
-      bookingId:    new Types.ObjectId(dto.bookingId),
+      propertyId: dto.reviewType === ReviewType.STAY ? propertyId : undefined,
+      bookingId: new Types.ObjectId(dto.bookingId),
       reviewedUserId: dto.reviewType === ReviewType.GUEST
         ? booking.guestId   // host is reviewing the guest
         : undefined,
-      rating:           dto.rating,
-      staySubRatings:   dto.staySubRatings  ?? {},
-      guestSubRatings:  dto.guestSubRatings ?? {},
-      comment:          dto.comment,
-      images:           dto.images ?? [],
-      verified:         true,
-      bookingVerified:  true,
-      isPublished:      shouldPublishNow,
+      rating: dto.rating,
+      staySubRatings: dto.staySubRatings ?? {},
+      guestSubRatings: dto.guestSubRatings ?? {},
+      comment: dto.comment,
+      images: dto.images ?? [],
+      verified: true,
+      bookingVerified: true,
+      isPublished: shouldPublishNow,
       publishDeadline,
     });
 
@@ -254,8 +254,8 @@ export class ReviewsService {
 
     // ── 8. Update Booking flags ───────────────────────────────────────────────
     const bookingUpdate: any = {};
-    if (dto.reviewType === ReviewType.STAY)  bookingUpdate.guestReviewLeft = true;
-    if (dto.reviewType === ReviewType.GUEST) bookingUpdate.hostReviewLeft  = true;
+    if (dto.reviewType === ReviewType.STAY) bookingUpdate.guestReviewLeft = true;
+    if (dto.reviewType === ReviewType.GUEST) bookingUpdate.hostReviewLeft = true;
     await this.bookingModel.findByIdAndUpdate(dto.bookingId, bookingUpdate);
 
     // ── 9. Update denormalized ratings on Property ────────────────────────────
@@ -290,10 +290,10 @@ export class ReviewsService {
 
     const query: any = { isActive: true, isPublished: true };
 
-    if (filters.reviewType)    query.reviewType    = filters.reviewType;
-    if (filters.propertyId)    query.propertyId    = new Types.ObjectId(filters.propertyId);
-    if (filters.agentId)       query.agentId       = new Types.ObjectId(filters.agentId);
-    if (filters.bookingId)     query.bookingId     = new Types.ObjectId(filters.bookingId);
+    if (filters.reviewType) query.reviewType = filters.reviewType;
+    if (filters.propertyId) query.propertyId = new Types.ObjectId(filters.propertyId);
+    if (filters.agentId) query.agentId = new Types.ObjectId(filters.agentId);
+    if (filters.bookingId) query.bookingId = new Types.ObjectId(filters.bookingId);
     if (filters.reviewedUserId) query.reviewedUserId = new Types.ObjectId(filters.reviewedUserId);
     if (filters.minRating || filters.maxRating) {
       query.rating = {};
@@ -307,9 +307,9 @@ export class ReviewsService {
     const [reviews, total] = await Promise.all([
       this.reviewModel
         .find(query)
-        .populate('userId',        'name profilePicture')
-        .populate('respondedBy',   'name profilePicture')
-        .populate('reviewedUserId','name profilePicture')
+        .populate('userId', 'name profilePicture')
+        .populate('respondedBy', 'name profilePicture')
+        .populate('reviewedUserId', 'name profilePicture')
         .sort(sort)
         .skip(skip)
         .limit(limit)
@@ -355,7 +355,7 @@ export class ReviewsService {
     const reviews = await this.reviewModel
       .find({
         propertyId: new Types.ObjectId(propertyId),
-        isActive:   true,
+        isActive: true,
         isPublished: true,
       })
       .select('rating staySubRatings reviewType')
@@ -416,17 +416,17 @@ export class ReviewsService {
     const [stayReview, guestReview] = await Promise.all([
       this.reviewModel
         .findOne({
-          bookingId:    new Types.ObjectId(bookingId),
+          bookingId: new Types.ObjectId(bookingId),
           reviewerRole: ReviewerRole.GUEST,
-          isActive:     true,
+          isActive: true,
         })
         .populate('userId', 'name profilePicture')
         .exec(),
       this.reviewModel
         .findOne({
-          bookingId:    new Types.ObjectId(bookingId),
+          bookingId: new Types.ObjectId(bookingId),
           reviewerRole: ReviewerRole.HOST,
-          isActive:     true,
+          isActive: true,
         })
         .populate('userId', 'name profilePicture')
         .exec(),
@@ -442,10 +442,10 @@ export class ReviewsService {
 
     const review = await this.reviewModel
       .findById(id)
-      .populate('userId',         'name profilePicture')
-      .populate('propertyId',     'title images address')
-      .populate('agentId',        'name profilePicture agency')
-      .populate('respondedBy',    'name profilePicture')
+      .populate('userId', 'name profilePicture')
+      .populate('propertyId', 'title images address')
+      .populate('agentId', 'name profilePicture agency')
+      .populate('respondedBy', 'name profilePicture')
       .populate('reviewedUserId', 'name profilePicture')
       .exec();
 
@@ -463,8 +463,8 @@ export class ReviewsService {
     const [reviews, total] = await Promise.all([
       this.reviewModel
         .find(query)
-        .populate('propertyId',  'title images address')
-        .populate('agentId',     'name profilePicture agency')
+        .populate('propertyId', 'title images address')
+        .populate('agentId', 'name profilePicture agency')
         .sort(sort).skip(skip).limit(limit)
         .exec(),
       this.reviewModel.countDocuments(query),
@@ -485,17 +485,17 @@ export class ReviewsService {
       throw new ForbiddenException('You can only update your own reviews');
     }
 
-    if (dto.rating)           review.rating          = dto.rating;
-    if (dto.comment)          review.comment         = dto.comment;
-    if (dto.images)           review.images          = dto.images;
-    if (dto.staySubRatings)   review.staySubRatings  = dto.staySubRatings;
-    if (dto.guestSubRatings)  review.guestSubRatings = dto.guestSubRatings;
+    if (dto.rating) review.rating = dto.rating;
+    if (dto.comment) review.comment = dto.comment;
+    if (dto.images) review.images = dto.images;
+    if (dto.staySubRatings) review.staySubRatings = dto.staySubRatings;
+    if (dto.guestSubRatings) review.guestSubRatings = dto.guestSubRatings;
 
     await review.save();
 
     if (dto.rating) {
       if (review.propertyId) await this.updatePropertyRating(review.propertyId.toString());
-      if (review.agentId)    await this.updateAgentRating(review.agentId.toString());
+      if (review.agentId) await this.updateAgentRating(review.agentId.toString());
       // Re-compute stay sub-rating averages if this is a stay review
       if (review.reviewType === ReviewType.STAY && review.propertyId) {
         await this.updatePropertyStayRating(review.propertyId.toString());
@@ -520,7 +520,7 @@ export class ReviewsService {
       throw new ForbiddenException('You can only respond to reviews about yourself or your properties');
     }
 
-    review.response    = dto.response;
+    review.response = dto.response;
     review.respondedBy = user._id as Types.ObjectId;
     review.respondedAt = new Date();
     await review.save();
@@ -566,7 +566,7 @@ export class ReviewsService {
     await review.save();
 
     if (review.propertyId) await this.updatePropertyRating(review.propertyId.toString());
-    if (review.agentId)    await this.updateAgentRating(review.agentId.toString());
+    if (review.agentId) await this.updateAgentRating(review.agentId.toString());
   }
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -580,10 +580,10 @@ export class ReviewsService {
   async publishExpiredReviews(): Promise<number> {
     const result = await this.reviewModel.updateMany(
       {
-        isPublished:     false,
+        isPublished: false,
         publishDeadline: { $lte: new Date() },
-        isActive:        true,
-        bookingId:       { $exists: true },
+        isActive: true,
+        bookingId: { $exists: true },
       },
       { $set: { isPublished: true } },
     );
@@ -606,7 +606,7 @@ export class ReviewsService {
   ): Promise<Review | null> {
     const query: any = { userId, isActive: true };
     if (propertyId) query.propertyId = new Types.ObjectId(propertyId);
-    if (agentId)    query.agentId    = new Types.ObjectId(agentId);
+    if (agentId) query.agentId = new Types.ObjectId(agentId);
     return this.reviewModel.findOne(query).exec();
   }
 
@@ -660,7 +660,7 @@ export class ReviewsService {
       const stats = await this.getPropertyReviewStats(propertyId);
       await this.propertyModel.findByIdAndUpdate(propertyId, {
         averageRating: stats.averageRating,
-        reviewCount:   stats.totalReviews,
+        reviewCount: stats.totalReviews,
       });
     } catch (error) {
       this.logger.error(`Failed to update property rating for ${propertyId}:`, error);
@@ -675,9 +675,9 @@ export class ReviewsService {
     try {
       const stayReviews = await this.reviewModel
         .find({
-          propertyId:  new Types.ObjectId(propertyId),
-          reviewType:  ReviewType.STAY,
-          isActive:    true,
+          propertyId: new Types.ObjectId(propertyId),
+          reviewType: ReviewType.STAY,
+          isActive: true,
           isPublished: true,
         })
         .select('rating staySubRatings')
@@ -693,9 +693,9 @@ export class ReviewsService {
 
       // Store on property — add a `stayRatingBreakdown` field to property schema if desired
       await this.propertyModel.findByIdAndUpdate(propertyId, {
-        averageRating:        overallAvg,
-        reviewCount:          stayReviews.length,
-        stayRatingBreakdown:  subAverages,  // optional extended field
+        averageRating: overallAvg,
+        reviewCount: stayReviews.length,
+        stayRatingBreakdown: subAverages,  // optional extended field
       });
     } catch (error) {
       this.logger.error(`Failed to update stay rating for property ${propertyId}:`, error);
@@ -707,7 +707,7 @@ export class ReviewsService {
       const stats = await this.getAgentReviewStats(agentId);
       await this.userModel.findByIdAndUpdate(agentId, {
         averageRating: stats.averageRating,
-        reviewCount:   stats.totalReviews,
+        reviewCount: stats.totalReviews,
       });
     } catch (error) {
       this.logger.error(`Failed to update agent rating for ${agentId}:`, error);

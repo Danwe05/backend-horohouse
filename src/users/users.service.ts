@@ -4,7 +4,7 @@ import { Model, Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { v2 as cloudinary } from 'cloudinary';
 
-import { User, UserDocument, UserRole, UserPreferences, TenantRecord } from './schemas/user.schema';
+import { User, UserDocument, UserRole, UserPreferences, TenantRecord, HostVerificationStatus, PayoutMethod, HostPayoutRecord } from './schemas/user.schema';
 import { CreateUserDto, UpdateUserDto, UpdatePreferencesDto, CreateTenantDto, UpdateTenantDto } from './dto';
 import { Property, PropertyDocument, PropertyImages, PropertyStatus } from 'src/properties/schemas/property.schema';
 import { ReviewsService } from 'src/reviews/reviews.service';
@@ -159,11 +159,30 @@ export class UsersService {
   }
 
   /**
-   * Toggle user role between REGISTERED_USER, AGENT, and LANDLORD
+   * Explicitly set a user's role.
+   * Replaces the old single-cycle toggleRole — now that HOST, GUEST, and STUDENT
+   * exist as distinct first-class roles, a deterministic target is cleaner.
+   * ADMIN role cannot be assigned through this endpoint.
    */
-  async toggleRole(id: string): Promise<User> {
+  async setRole(id: string, newRole: UserRole): Promise<User> {
     if (!Types.ObjectId.isValid(id)) {
       throw new BadRequestException('Invalid user ID');
+    }
+
+    if (newRole === UserRole.ADMIN) {
+      throw new BadRequestException('Cannot assign ADMIN role via this endpoint');
+    }
+
+    const allowedRoles: UserRole[] = [
+      UserRole.REGISTERED_USER,
+      UserRole.AGENT,
+      UserRole.LANDLORD,
+      UserRole.HOST,
+      UserRole.GUEST,
+      UserRole.STUDENT,
+    ];
+    if (!allowedRoles.includes(newRole)) {
+      throw new BadRequestException(`Invalid role: ${newRole}`);
     }
 
     const user = await this.userModel.findById(id).exec();
@@ -172,24 +191,42 @@ export class UsersService {
     }
 
     if (user.role === UserRole.ADMIN) {
-      throw new BadRequestException('Cannot toggle admin role via this endpoint');
+      throw new BadRequestException('Cannot change the role of an ADMIN user via this endpoint');
     }
 
-    let newRole: UserRole;
-    if (user.role === UserRole.REGISTERED_USER) {
-      newRole = UserRole.AGENT;
-    } else if (user.role === UserRole.AGENT) {
-      newRole = UserRole.LANDLORD;
-    } else {
-      newRole = UserRole.REGISTERED_USER;
+    // When assigning HOST, ensure a default hostProfile sub-document exists
+    const extraUpdate: any = {};
+    if (newRole === UserRole.HOST && !user.hostProfile) {
+      extraUpdate.hostProfile = {
+        verificationStatus: HostVerificationStatus.UNVERIFIED,
+        isSuperhost: false,
+        instantBookEnabled: false,
+        minNightsDefault: 1,
+        maxNightsDefault: 0,
+        advanceNoticeHours: 24,
+        bookingWindowMonths: 12,
+        totalEarnings: 0,
+        currentMonthEarnings: 0,
+        completedStays: 0,
+        commissionRate: 0.12,
+        payoutAccounts: [],
+        payoutHistory: [],
+        petsAllowedDefault: false,
+        smokingAllowedDefault: false,
+        eventsAllowedDefault: false,
+        checkInTimeDefault: '15:00',
+        checkOutTimeDefault: '11:00',
+        coHostIds: [],
+        hostLanguages: [],
+      };
     }
 
     const updatedUser = await this.userModel
-      .findByIdAndUpdate(id, { $set: { role: newRole } }, { new: true })
+      .findByIdAndUpdate(id, { $set: { role: newRole, ...extraUpdate } }, { new: true })
       .select('-firebaseUid')
       .exec();
 
-    this.logger.log(`✅ User role toggled for ${id}: ${user.role} -> ${newRole}`);
+    this.logger.log(`✅ User role set for ${id}: ${user.role} -> ${newRole}`);
     return updatedUser!;
   }
 
@@ -551,41 +588,70 @@ export class UsersService {
   }
 
   /**
-   * Get user statistics
+   * Get user statistics — full role breakdown for the admin dashboard.
    */
   async getStats(): Promise<any> {
     const [
       totalUsers,
       activeUsers,
       agentUsers,
+      landlordUsers,
+      hostUsers,
+      studentUsers,
+      guestUsers,
+      registeredUsers,
       verifiedUsers,
       recentUsers,
     ] = await Promise.all([
       this.userModel.countDocuments(),
       this.userModel.countDocuments({ isActive: true }),
       this.userModel.countDocuments({ role: UserRole.AGENT }),
+      this.userModel.countDocuments({ role: UserRole.LANDLORD }),
+      this.userModel.countDocuments({ role: UserRole.HOST }),
+      this.userModel.countDocuments({ role: UserRole.STUDENT }),
+      this.userModel.countDocuments({ role: UserRole.GUEST }),
+      this.userModel.countDocuments({ role: UserRole.REGISTERED_USER }),
       this.userModel.countDocuments({
-        $or: [{ emailVerified: true }, { phoneVerified: true }]
+        $or: [{ emailVerified: true }, { phoneVerified: true }],
       }),
       this.userModel.countDocuments({
-        createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+        createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
       }),
     ]);
 
-    const roleStats = await this.userModel.aggregate([
-      { $group: { _id: '$role', count: { $sum: 1 } } },
-    ]);
+    // Superhost count — useful KPI for host quality
+    const superhostUsers = await this.userModel.countDocuments({
+      role: UserRole.HOST,
+      'hostProfile.isSuperhost': true,
+    });
+
+    // Pending host verifications — action queue for admins
+    const pendingHostVerifications = await this.userModel.countDocuments({
+      role: UserRole.HOST,
+      'hostProfile.verificationStatus': HostVerificationStatus.PENDING,
+    });
 
     return {
       total: totalUsers,
       active: activeUsers,
-      agents: agentUsers,
       verified: verifiedUsers,
       recent: recentUsers,
-      byRole: roleStats.reduce((acc, stat) => {
-        acc[stat._id] = stat.count;
-        return acc;
-      }, {}),
+      byRole: {
+        [UserRole.REGISTERED_USER]: registeredUsers,
+        [UserRole.AGENT]: agentUsers,
+        [UserRole.LANDLORD]: landlordUsers,
+        [UserRole.HOST]: hostUsers,
+        [UserRole.STUDENT]: studentUsers,
+        [UserRole.GUEST]: guestUsers,
+      },
+      // Legacy flat fields kept for backward-compat
+      agents: agentUsers,
+      landlords: landlordUsers,
+      hosts: hostUsers,
+      students: studentUsers,
+      guests: guestUsers,
+      superhosts: superhostUsers,
+      pendingHostVerifications,
     };
   }
 
@@ -1649,5 +1715,612 @@ export class UsersService {
     }
 
     return { leases };
+  }
+
+  // ==========================================
+  // HOST MANAGEMENT
+  // ==========================================
+
+  /**
+   * Get all active hosts — aggregated with short-term listing stats.
+   * Mirrors getAgents / getLandlords.
+   */
+  async getHosts(page = 1, limit = 10): Promise<any> {
+    const skip = (page - 1) * limit;
+
+    const hosts = await this.userModel.aggregate([
+      { $match: { role: UserRole.HOST, isActive: true } },
+      {
+        $lookup: {
+          from: 'properties',
+          let: { hostId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ['$ownerId', '$$hostId'] },
+                isActive: true,
+                listingType: 'short-term',
+              },
+            },
+          ],
+          as: 'shortTermProperties',
+        },
+      },
+      {
+        $addFields: {
+          totalListings: { $size: '$shortTermProperties' },
+          activeListings: {
+            $size: {
+              $filter: {
+                input: '$shortTermProperties',
+                cond: { $eq: ['$$this.status', 'available'] },
+              },
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          name: 1,
+          email: 1,
+          phoneNumber: 1,
+          profilePicture: 1,
+          city: 1,
+          country: 1,
+          totalListings: 1,
+          activeListings: 1,
+          'hostProfile.isSuperhost': 1,
+          'hostProfile.verificationStatus': 1,
+          'hostProfile.completedStays': 1,
+          'hostProfile.totalEarnings': 1,
+          'hostProfile.responseRate': 1,
+          averageRating: 1,
+          createdAt: 1,
+        },
+      },
+      { $sort: { totalListings: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+    ]);
+
+    const total = await this.userModel.countDocuments({
+      role: UserRole.HOST,
+      isActive: true,
+    });
+
+    return {
+      hosts,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Get a single host's full profile.
+   * Strips sensitive hostProfile fields (governmentIdPublicId) before returning.
+   */
+  async getHostById(id: string): Promise<any> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid host ID');
+    }
+
+    const host = await this.userModel
+      .findOne({ _id: id, role: UserRole.HOST, isActive: true })
+      .select('-firebaseUid -password -sessions -searchHistory')
+      .exec();
+
+    if (!host) {
+      throw new NotFoundException('Host not found');
+    }
+
+    const [listingStats, reviewStats] = await Promise.all([
+      this.getHostListingStats(id),
+      this.getAgentReviewStats(id).catch(() => ({ averageRating: 0, totalReviews: 0 })),
+    ]);
+
+    // Build sanitised hostProfile — drop server-only public_id
+    const hp = host.hostProfile ? { ...host.hostProfile } as any : null;
+    if (hp?.governmentIdPublicId) delete hp.governmentIdPublicId;
+
+    // Strip payout account identifiers for non-admin callers;
+    // the controller can decide how much to expose.
+    const payoutAccountsSummary = (hp?.payoutAccounts ?? []).map((acc: any) => ({
+      method: acc.method,
+      providerName: acc.providerName,
+      isDefault: acc.isDefault,
+      currency: acc.currency,
+      // accountIdentifier intentionally omitted — sensitive
+    }));
+
+    return {
+      id: host._id.toString(),
+      name: host.name,
+      email: host.email,
+      phoneNumber: host.phoneNumber,
+      profilePicture: host.profilePicture,
+      bio: host.bio,
+      city: host.city,
+      country: host.country,
+      address: host.address,
+      location: host.location,
+      languages: host.languages,
+      averageRating: reviewStats.averageRating,
+      reviewCount: reviewStats.totalReviews,
+      // Listing stats
+      totalListings: listingStats.totalListings,
+      activeListings: listingStats.activeListings,
+      // Host profile (sensitive fields stripped)
+      hostProfile: hp
+        ? {
+            ...hp,
+            payoutAccounts: payoutAccountsSummary,
+          }
+        : null,
+      createdAt: host.createdAt,
+    };
+  }
+
+  /**
+   * Compute live dashboard stats for a host.
+   * Mirrors getLandlordStats — called per-host for the host dashboard.
+   */
+  async getHostStats(id: string): Promise<any> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid host ID');
+    }
+
+    const host = await this.userModel
+      .findOne({ _id: id, role: UserRole.HOST, isActive: true })
+      .exec();
+
+    if (!host) {
+      throw new NotFoundException('Host not found');
+    }
+
+    const [listingStats, reviewStats] = await Promise.all([
+      this.getHostListingStats(id),
+      this.getAgentReviewStats(id).catch(() => ({ averageRating: 0, totalReviews: 0 })),
+    ]);
+
+    const hp = host.hostProfile;
+
+    // Occupancy rate: (active short-term properties with at least one stay) / total
+    // For now derived from the stored completedStays vs total listings ratio as a proxy.
+    const occupancyRate =
+      listingStats.totalListings > 0
+        ? Math.min(
+            Math.round(((hp?.completedStays ?? 0) / (listingStats.totalListings * 30)) * 100),
+            100,
+          )
+        : 0;
+
+    return {
+      totalListings: listingStats.totalListings,
+      activeListings: listingStats.activeListings,
+      completedStays: hp?.completedStays ?? 0,
+      currentMonthEarnings: hp?.currentMonthEarnings ?? 0,
+      totalEarnings: hp?.totalEarnings ?? 0,
+      averageRating: reviewStats.averageRating,
+      reviewCount: reviewStats.totalReviews,
+      isSuperhost: hp?.isSuperhost ?? false,
+      verificationStatus: hp?.verificationStatus ?? HostVerificationStatus.UNVERIFIED,
+      responseRate: hp?.responseRate ?? null,
+      responseTimeMinutes: hp?.responseTimeMinutes ?? null,
+      occupancyRate,
+    };
+  }
+
+  /**
+   * PATCH handler for hostProfile fields.
+   *
+   * Handles:
+   *  - Government ID upload (buffer) → Cloudinary → sets status to PENDING
+   *  - instantBookEnabled toggle
+   *  - House-rule defaults
+   *  - Payout account add / remove
+   *  - Co-host add / remove
+   *  - Bio / language / operatingCity updates
+   */
+  async updateHostProfile(
+    id: string,
+    updates: {
+      // Verification
+      governmentIdBuffer?: Buffer;
+      // Preferences
+      instantBookEnabled?: boolean;
+      minNightsDefault?: number;
+      maxNightsDefault?: number;
+      advanceNoticeHours?: number;
+      bookingWindowMonths?: number;
+      // House rules
+      petsAllowedDefault?: boolean;
+      smokingAllowedDefault?: boolean;
+      eventsAllowedDefault?: boolean;
+      checkInTimeDefault?: string;
+      checkOutTimeDefault?: string;
+      // Payout accounts
+      addPayoutAccount?: {
+        method: PayoutMethod;
+        accountIdentifier: string;
+        providerName?: string;
+        isDefault?: boolean;
+        currency?: string;
+      };
+      removePayoutAccountIdentifier?: string;
+      // Co-hosts
+      addCoHostId?: string;
+      removeCoHostId?: string;
+      // Bio
+      hostBio?: string;
+      hostLanguages?: string[];
+      operatingCity?: string;
+    },
+  ): Promise<any> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid host ID');
+    }
+
+    const host = await this.userModel.findOne({ _id: id, role: UserRole.HOST, isActive: true }).exec();
+    if (!host) {
+      throw new NotFoundException('Host not found');
+    }
+
+    const setFields: any = {};
+    const arrayPushOps: any = {};
+    const arrayPullOps: any = {};
+
+    // ── Government ID upload ───────────────────────────────────────────────
+    if (updates.governmentIdBuffer) {
+      const uploadResult = await new Promise<any>((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: 'horohouse/host-ids', resource_type: 'image' },
+          (err, result) => {
+            if (err) reject(err);
+            else resolve(result);
+          },
+        );
+        stream.end(updates.governmentIdBuffer);
+      });
+
+      setFields['hostProfile.governmentIdUrl'] = uploadResult.secure_url;
+      setFields['hostProfile.governmentIdPublicId'] = uploadResult.public_id;
+      setFields['hostProfile.verificationStatus'] = HostVerificationStatus.PENDING;
+      setFields['hostProfile.verificationSubmittedAt'] = new Date();
+      this.logger.log(`📄 Government ID uploaded for host ${id}`);
+    }
+
+    // ── Scalar preference fields ───────────────────────────────────────────
+    const scalarMap: Record<string, string> = {
+      instantBookEnabled: 'hostProfile.instantBookEnabled',
+      minNightsDefault: 'hostProfile.minNightsDefault',
+      maxNightsDefault: 'hostProfile.maxNightsDefault',
+      advanceNoticeHours: 'hostProfile.advanceNoticeHours',
+      bookingWindowMonths: 'hostProfile.bookingWindowMonths',
+      petsAllowedDefault: 'hostProfile.petsAllowedDefault',
+      smokingAllowedDefault: 'hostProfile.smokingAllowedDefault',
+      eventsAllowedDefault: 'hostProfile.eventsAllowedDefault',
+      checkInTimeDefault: 'hostProfile.checkInTimeDefault',
+      checkOutTimeDefault: 'hostProfile.checkOutTimeDefault',
+      hostBio: 'hostProfile.hostBio',
+      hostLanguages: 'hostProfile.hostLanguages',
+      operatingCity: 'hostProfile.operatingCity',
+    };
+
+    for (const [key, dbPath] of Object.entries(scalarMap)) {
+      if ((updates as any)[key] !== undefined) {
+        setFields[dbPath] = (updates as any)[key];
+      }
+    }
+
+    // ── Payout account add ─────────────────────────────────────────────────
+    if (updates.addPayoutAccount) {
+      const acc = updates.addPayoutAccount;
+      // If new account is default, clear existing defaults first
+      if (acc.isDefault) {
+        await this.userModel.updateOne(
+          { _id: id },
+          { $set: { 'hostProfile.payoutAccounts.$[].isDefault': false } },
+        );
+      }
+      arrayPushOps['hostProfile.payoutAccounts'] = {
+        method: acc.method,
+        accountIdentifier: acc.accountIdentifier,
+        providerName: acc.providerName,
+        isDefault: acc.isDefault ?? false,
+        currency: acc.currency ?? 'XAF',
+      };
+    }
+
+    // ── Payout account remove ──────────────────────────────────────────────
+    if (updates.removePayoutAccountIdentifier) {
+      arrayPullOps['hostProfile.payoutAccounts'] = {
+        accountIdentifier: updates.removePayoutAccountIdentifier,
+      };
+    }
+
+    // ── Co-host add ────────────────────────────────────────────────────────
+    if (updates.addCoHostId) {
+      if (!Types.ObjectId.isValid(updates.addCoHostId)) {
+        throw new BadRequestException('Invalid co-host user ID');
+      }
+      arrayPushOps['hostProfile.coHostIds'] = new Types.ObjectId(updates.addCoHostId);
+    }
+
+    // ── Co-host remove ─────────────────────────────────────────────────────
+    if (updates.removeCoHostId) {
+      if (!Types.ObjectId.isValid(updates.removeCoHostId)) {
+        throw new BadRequestException('Invalid co-host user ID');
+      }
+      arrayPullOps['hostProfile.coHostIds'] = new Types.ObjectId(updates.removeCoHostId);
+    }
+
+    // Build update command
+    const updateCmd: any = {};
+    if (Object.keys(setFields).length > 0) updateCmd.$set = setFields;
+    if (Object.keys(arrayPushOps).length > 0) {
+      updateCmd.$push = {};
+      for (const [k, v] of Object.entries(arrayPushOps)) {
+        updateCmd.$push[k] = { $each: [v] };
+      }
+    }
+    if (Object.keys(arrayPullOps).length > 0) updateCmd.$pull = arrayPullOps;
+
+    if (Object.keys(updateCmd).length === 0) {
+      throw new BadRequestException('No host profile fields to update');
+    }
+
+    const updated = await this.userModel
+      .findOneAndUpdate({ _id: id }, updateCmd, { new: true })
+      .select('-firebaseUid -password -sessions -searchHistory')
+      .exec();
+
+    this.logger.log(`✅ Host profile updated for ${id}`);
+    return updated;
+  }
+
+  /**
+   * Admin action: approve or reject a host's identity verification.
+   */
+  async verifyHost(
+    id: string,
+    decision: 'approve' | 'reject',
+    rejectionReason?: string,
+  ): Promise<any> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid host ID');
+    }
+
+    const host = await this.userModel.findOne({ _id: id, role: UserRole.HOST }).exec();
+    if (!host) {
+      throw new NotFoundException('Host not found');
+    }
+
+    if (!host.hostProfile) {
+      throw new BadRequestException('Host has no hostProfile sub-document');
+    }
+
+    if (host.hostProfile.verificationStatus !== HostVerificationStatus.PENDING) {
+      throw new BadRequestException(
+        `Cannot ${decision} a verification that is not in PENDING state (current: ${host.hostProfile.verificationStatus})`,
+      );
+    }
+
+    const newStatus =
+      decision === 'approve' ? HostVerificationStatus.VERIFIED : HostVerificationStatus.REJECTED;
+
+    const setFields: any = {
+      'hostProfile.verificationStatus': newStatus,
+      'hostProfile.verificationReviewedAt': new Date(),
+    };
+
+    if (decision === 'reject' && rejectionReason) {
+      setFields['hostProfile.verificationRejectionReason'] = rejectionReason;
+    }
+
+    const updated = await this.userModel
+      .findByIdAndUpdate(id, { $set: setFields }, { new: true })
+      .select('-firebaseUid -password -sessions -searchHistory')
+      .exec();
+
+    this.logger.log(`✅ Host ${id} verification ${decision}d by admin`);
+    return {
+      message: `Host verification ${decision}d`,
+      verificationStatus: newStatus,
+      verificationReviewedAt: setFields['hostProfile.verificationReviewedAt'],
+      user: updated,
+    };
+  }
+
+  /**
+   * Evaluate the 4 Superhost thresholds and update isSuperhost accordingly.
+   * Designed to be called by a scheduled job (Cron) or triggered after a booking completes.
+   *
+   * Thresholds (Airbnb-aligned):
+   *  1. responseRate  ≥ 90 %
+   *  2. averageRating ≥ 4.8
+   *  3. completedStays ≥ 10 in the last 12 months  (approximated from stored completedStays)
+   *  4. cancellation rate  < 1 %  (not yet tracked; evaluated as true by default until tracked)
+   */
+  async recalculateSuperhostStatus(id: string): Promise<{
+    isSuperhost: boolean;
+    reason?: string;
+    superhostSince?: Date;
+  }> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid host ID');
+    }
+
+    const host = await this.userModel.findOne({ _id: id, role: UserRole.HOST }).exec();
+    if (!host) {
+      throw new NotFoundException('Host not found');
+    }
+
+    const hp = host.hostProfile;
+    if (!hp) {
+      throw new BadRequestException('Host has no hostProfile sub-document');
+    }
+
+    const reviewStats = await this.getAgentReviewStats(id).catch(() => ({
+      averageRating: 0,
+      totalReviews: 0,
+    }));
+
+    const meetsResponseRate = (hp.responseRate ?? 0) >= 90;
+    const meetsRating = reviewStats.averageRating >= 4.8;
+    const meetsStays = (hp.completedStays ?? 0) >= 10;
+    // Cancellation tracking is a future feature; treat as passing for now.
+    const meetsCancellation = true;
+
+    const qualifies = meetsResponseRate && meetsRating && meetsStays && meetsCancellation;
+
+    const wasAlreadySuperhost = hp.isSuperhost;
+    const setFields: any = { 'hostProfile.isSuperhost': qualifies };
+
+    if (qualifies && !wasAlreadySuperhost) {
+      setFields['hostProfile.superhostSince'] = new Date();
+    } else if (!qualifies && wasAlreadySuperhost) {
+      // Lost Superhost status — clear the date
+      setFields['hostProfile.superhostSince'] = null;
+    }
+
+    await this.userModel.findByIdAndUpdate(id, { $set: setFields }).exec();
+
+    const reason = qualifies
+      ? undefined
+      : [
+          !meetsResponseRate && `responseRate ${hp.responseRate ?? 0}% < 90%`,
+          !meetsRating && `rating ${reviewStats.averageRating} < 4.8`,
+          !meetsStays && `completedStays ${hp.completedStays ?? 0} < 10`,
+        ]
+          .filter(Boolean)
+          .join('; ');
+
+    this.logger.log(
+      `🏅 Superhost recalculated for ${id}: ${qualifies ? 'GRANTED' : 'DENIED'}${reason ? ` (${reason})` : ''}`,
+    );
+
+    return {
+      isSuperhost: qualifies,
+      reason,
+      superhostSince: qualifies ? setFields['hostProfile.superhostSince'] ?? hp.superhostSince : undefined,
+    };
+  }
+
+  /**
+   * Record a completed payout from the bookings/payments service.
+   * Appends to payoutHistory (capped at 50) and updates financial summary fields.
+   * Called after a stay completes and payment is disbursed to the host.
+   */
+  async recordHostPayout(
+    id: string,
+    record: Omit<HostPayoutRecord, '_id'>,
+  ): Promise<any> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid host ID');
+    }
+
+    const host = await this.userModel.findOne({ _id: id, role: UserRole.HOST }).exec();
+    if (!host) {
+      throw new NotFoundException('Host not found');
+    }
+
+    if (!host.hostProfile) {
+      throw new BadRequestException('Host has no hostProfile sub-document');
+    }
+
+    const payoutEntry: HostPayoutRecord = {
+      _id: new Types.ObjectId(),
+      ...record,
+    };
+
+    // Determine if this payout falls in the current calendar month
+    const now = new Date();
+    const initiatedAt = new Date(record.initiatedAt);
+    const isCurrentMonth =
+      initiatedAt.getFullYear() === now.getFullYear() &&
+      initiatedAt.getMonth() === now.getMonth();
+
+    // Build atomic update
+    const setFields: any = {
+      'hostProfile.totalEarnings': (host.hostProfile.totalEarnings ?? 0) + record.amount,
+    };
+
+    if (isCurrentMonth) {
+      setFields['hostProfile.currentMonthEarnings'] =
+        (host.hostProfile.currentMonthEarnings ?? 0) + record.amount;
+    }
+
+    // Increment completedStays only when status is 'paid' (final success)
+    if (record.status === 'paid') {
+      setFields['hostProfile.completedStays'] = (host.hostProfile.completedStays ?? 0) + 1;
+    }
+
+    await this.userModel.updateOne(
+      { _id: id },
+      {
+        $set: setFields,
+        $push: {
+          'hostProfile.payoutHistory': {
+            $each: [payoutEntry],
+            $position: 0,
+            $slice: 50, // Keep latest 50 records
+          },
+        },
+      },
+    );
+
+    this.logger.log(
+      `💰 Payout recorded for host ${id}: ${record.amount} ${record.currency} (${record.status})`,
+    );
+
+    return {
+      message: 'Payout recorded successfully',
+      payout: payoutEntry,
+      newTotalEarnings: setFields['hostProfile.totalEarnings'],
+    };
+  }
+
+  // ── Private host helpers ──────────────────────────────────────────────────
+
+  /**
+   * Aggregate short-term listing counts for a host.
+   */
+  private async getHostListingStats(hostId: string): Promise<{
+    totalListings: number;
+    activeListings: number;
+  }> {
+    const hostObjectId = new Types.ObjectId(hostId);
+
+    const result = await this.propertyModel.aggregate([
+      {
+        $match: {
+          ownerId: hostObjectId,
+          isActive: true,
+          listingType: 'short-term',
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalListings: { $sum: 1 },
+          activeListings: {
+            $sum: {
+              $cond: [{ $eq: ['$availability', 'available'] }, 1, 0],
+            },
+          },
+        },
+      },
+    ]);
+
+    if (!result || result.length === 0) {
+      return { totalListings: 0, activeListings: 0 };
+    }
+
+    return {
+      totalListings: result[0].totalListings ?? 0,
+      activeListings: result[0].activeListings ?? 0,
+    };
   }
 }

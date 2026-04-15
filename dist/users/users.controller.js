@@ -81,8 +81,11 @@ let UsersController = class UsersController {
         }
         return this.usersService.update(req.user.id, updateUserDto);
     }
-    async toggleMyRole(req) {
-        return this.usersService.toggleRole(req.user.id);
+    async setMyRole(req, body) {
+        if (!body.role) {
+            throw new common_1.BadRequestException('role is required in request body');
+        }
+        return this.usersService.setRole(req.user.id, body.role);
     }
     async getMyTenants(req) {
         const user = await this.usersService.findOne(req.user.id);
@@ -149,6 +152,27 @@ let UsersController = class UsersController {
             page: page ? parseInt(page.toString()) : 1,
             limit: limit ? parseInt(limit.toString()) : 100,
         });
+    }
+    async getHosts(page, limit) {
+        return this.usersService.getHosts(page ? parseInt(page.toString()) : 1, limit ? parseInt(limit.toString()) : 10);
+    }
+    async getHostById(id) {
+        return this.usersService.getHostById(id);
+    }
+    async getHostStats(id) {
+        return this.usersService.getHostStats(id);
+    }
+    async updateHostProfile(id, body) {
+        return this.usersService.updateHostProfile(id, body);
+    }
+    async verifyHost(id, body) {
+        return this.usersService.verifyHost(id, body.decision, body.rejectionReason);
+    }
+    async recalculateSuperhostStatus(id) {
+        return this.usersService.recalculateSuperhostStatus(id);
+    }
+    async recordHostPayout(id, record) {
+        return this.usersService.recordHostPayout(id, record);
     }
     async findOne(id) {
         return this.usersService.findOne(id);
@@ -282,13 +306,14 @@ __decorate([
 ], UsersController.prototype, "updateMe", null);
 __decorate([
     (0, common_1.Patch)('me/role'),
-    (0, swagger_1.ApiOperation)({ summary: 'Toggle role between USER, AGENT, and LANDLORD' }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Role toggled successfully' }),
+    (0, swagger_1.ApiOperation)({ summary: 'Set role explicitly (REGISTERED_USER | AGENT | LANDLORD | HOST | GUEST | STUDENT). ADMIN cannot be assigned here.' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Role updated successfully' }),
     __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, dto_1.SetRoleDto]),
     __metadata("design:returntype", Promise)
-], UsersController.prototype, "toggleMyRole", null);
+], UsersController.prototype, "setMyRole", null);
 __decorate([
     (0, common_1.Get)('me/tenants'),
     (0, roles_guard_1.Roles)(user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
@@ -505,6 +530,84 @@ __decorate([
     __metadata("design:paramtypes", [String, String, Number, Number]),
     __metadata("design:returntype", Promise)
 ], UsersController.prototype, "getLandlordProperties", null);
+__decorate([
+    (0, common_1.Get)('hosts'),
+    (0, roles_guard_2.Public)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Get all active hosts with short-term listing stats' }),
+    (0, swagger_1.ApiQuery)({ name: 'page', required: false, type: Number }),
+    (0, swagger_1.ApiQuery)({ name: 'limit', required: false, type: Number }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Hosts retrieved successfully' }),
+    __param(0, (0, common_1.Query)('page')),
+    __param(1, (0, common_1.Query)('limit')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Number, Number]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "getHosts", null);
+__decorate([
+    (0, common_1.Get)('hosts/:id'),
+    (0, roles_guard_2.Public)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Get host by ID with full profile (sensitive fields stripped)' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Host profile retrieved successfully' }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: 'Host not found' }),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "getHostById", null);
+__decorate([
+    (0, common_1.Get)('hosts/:id/stats'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get live dashboard stats for a host' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Host stats retrieved successfully' }),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "getHostStats", null);
+__decorate([
+    (0, common_1.Patch)('hosts/:id/profile'),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.ADMIN),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Update host profile fields — preferences, house rules, payout accounts, co-hosts, bio',
+    }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Host profile updated' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, dto_1.UpdateHostProfileDto]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "updateHostProfile", null);
+__decorate([
+    (0, common_1.Patch)('hosts/:id/verify'),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.ADMIN),
+    (0, swagger_1.ApiOperation)({ summary: 'Approve or reject a host identity verification (Admin only)' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Verification decision applied' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, dto_1.VerifyHostDto]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "verifyHost", null);
+__decorate([
+    (0, common_1.Post)('hosts/:id/superhost/recalculate'),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.ADMIN),
+    (0, swagger_1.ApiOperation)({ summary: 'Manually trigger Superhost status recalculation (Admin only)' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Superhost status recalculated' }),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "recalculateSuperhostStatus", null);
+__decorate([
+    (0, common_1.Post)('hosts/:id/payouts'),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.ADMIN),
+    (0, swagger_1.ApiOperation)({ summary: 'Record a host payout — called internally by payments service (Admin only)' }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: 'Payout recorded successfully' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, dto_1.RecordHostPayoutDto]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "recordHostPayout", null);
 __decorate([
     (0, common_1.Get)(':id'),
     (0, roles_guard_2.Public)(),

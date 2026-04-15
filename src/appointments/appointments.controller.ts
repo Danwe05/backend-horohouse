@@ -21,7 +21,7 @@ export class AppointmentsController {
     constructor(private readonly appointmentsService: AppointmentsService) { }
 
     @Post()
-    @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiOperation({ summary: 'Create a new appointment (agents & admins only)' })
     @ApiResponse({ status: 201, description: 'Appointment created' })
     @ApiResponse({ status: 400, description: 'Scheduling conflict or validation error' })
@@ -33,7 +33,7 @@ export class AppointmentsController {
     }
 
     @Post('schedule')
-    @Roles(UserRole.REGISTERED_USER, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.REGISTERED_USER, UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiOperation({ summary: 'Schedule a property tour (all authenticated users)' })
     @ApiResponse({ status: 201, description: 'Tour scheduled successfully' })
     @ApiResponse({ status: 400, description: 'Scheduling conflict or validation error' })
@@ -45,14 +45,14 @@ export class AppointmentsController {
     }
 
     @Get('stats')
-    @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiOperation({ summary: 'Get appointment statistics (scoped to current user)' })
     getStats(@Req() req: FastifyRequest & { user: User }) {
         return this.appointmentsService.getStats(req.user);
     }
 
     @Get('my-tours')
-    @Roles(UserRole.REGISTERED_USER, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.REGISTERED_USER, UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiOperation({ summary: 'Get tours scheduled by the current user (as client)' })
     @ApiQuery({ name: 'limit', required: false, type: Number })
     getMyTours(
@@ -63,7 +63,7 @@ export class AppointmentsController {
     }
 
     @Get()
-    @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiOperation({ summary: 'Get appointments (scoped to agent; admin can view all)' })
     @ApiQuery({ name: 'page', required: false, type: Number })
     @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -91,7 +91,7 @@ export class AppointmentsController {
     }
 
     @Get(':id')
-    @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiOperation({ summary: 'Get a single appointment (owner or admin only)' })
     findOne(
         @Param('id') id: string,
@@ -101,7 +101,7 @@ export class AppointmentsController {
     }
 
     @Put(':id')
-    @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiOperation({ summary: 'Update an appointment (owner or admin only)' })
     update(
         @Param('id') id: string,
@@ -112,7 +112,7 @@ export class AppointmentsController {
     }
 
     @Post(':id/notes')
-    @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiOperation({ summary: 'Add a note to an appointment' })
     addNote(
         @Param('id') id: string,
@@ -123,7 +123,7 @@ export class AppointmentsController {
     }
 
     @Delete(':id')
-    @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+    @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
     @ApiOperation({ summary: 'Delete an appointment (owner or admin only)' })
     remove(
         @Param('id') id: string,

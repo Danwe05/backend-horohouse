@@ -69,7 +69,7 @@ let AppointmentsController = class AppointmentsController {
 exports.AppointmentsController = AppointmentsController;
 __decorate([
     (0, common_1.Post)(),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Create a new appointment (agents & admins only)' }),
     (0, swagger_1.ApiResponse)({ status: 201, description: 'Appointment created' }),
     (0, swagger_1.ApiResponse)({ status: 400, description: 'Scheduling conflict or validation error' }),
@@ -81,7 +81,7 @@ __decorate([
 ], AppointmentsController.prototype, "create", null);
 __decorate([
     (0, common_1.Post)('schedule'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Schedule a property tour (all authenticated users)' }),
     (0, swagger_1.ApiResponse)({ status: 201, description: 'Tour scheduled successfully' }),
     (0, swagger_1.ApiResponse)({ status: 400, description: 'Scheduling conflict or validation error' }),
@@ -93,7 +93,7 @@ __decorate([
 ], AppointmentsController.prototype, "scheduleTour", null);
 __decorate([
     (0, common_1.Get)('stats'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Get appointment statistics (scoped to current user)' }),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -102,7 +102,7 @@ __decorate([
 ], AppointmentsController.prototype, "getStats", null);
 __decorate([
     (0, common_1.Get)('my-tours'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Get tours scheduled by the current user (as client)' }),
     (0, swagger_1.ApiQuery)({ name: 'limit', required: false, type: Number }),
     __param(0, (0, common_1.Req)()),
@@ -113,7 +113,7 @@ __decorate([
 ], AppointmentsController.prototype, "getMyTours", null);
 __decorate([
     (0, common_1.Get)(),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Get appointments (scoped to agent; admin can view all)' }),
     (0, swagger_1.ApiQuery)({ name: 'page', required: false, type: Number }),
     (0, swagger_1.ApiQuery)({ name: 'limit', required: false, type: Number }),
@@ -131,7 +131,7 @@ __decorate([
 ], AppointmentsController.prototype, "findAll", null);
 __decorate([
     (0, common_1.Get)(':id'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Get a single appointment (owner or admin only)' }),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Req)()),
@@ -141,7 +141,7 @@ __decorate([
 ], AppointmentsController.prototype, "findOne", null);
 __decorate([
     (0, common_1.Put)(':id'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Update an appointment (owner or admin only)' }),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
@@ -152,7 +152,7 @@ __decorate([
 ], AppointmentsController.prototype, "update", null);
 __decorate([
     (0, common_1.Post)(':id/notes'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Add a note to an appointment' }),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)('content')),
@@ -163,7 +163,7 @@ __decorate([
 ], AppointmentsController.prototype, "addNote", null);
 __decorate([
     (0, common_1.Delete)(':id'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Delete an appointment (owner or admin only)' }),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Req)()),

@@ -82,7 +82,7 @@ let RoomsController = class RoomsController {
 exports.RoomsController = RoomsController;
 __decorate([
     (0, common_1.Post)(),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({ summary: 'Create a room for a hotel/hostel/motel property' }),
     (0, swagger_1.ApiResponse)({ status: 201, description: 'Room created' }),
@@ -121,7 +121,7 @@ __decorate([
 ], RoomsController.prototype, "getRoomById", null);
 __decorate([
     (0, common_1.Patch)(':id'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({ summary: 'Update a room' }),
     (0, swagger_1.ApiParam)({ name: 'id', description: 'Room ID' }),
@@ -135,7 +135,7 @@ __decorate([
 ], RoomsController.prototype, "updateRoom", null);
 __decorate([
     (0, common_1.Delete)(':id'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, common_1.HttpCode)(common_1.HttpStatus.NO_CONTENT),
     (0, swagger_1.ApiOperation)({ summary: 'Soft-delete a room (marks isActive = false)' }),
@@ -149,7 +149,7 @@ __decorate([
 ], RoomsController.prototype, "deleteRoom", null);
 __decorate([
     (0, common_1.Post)(':id/images'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({ summary: 'Upload images to a specific room' }),
     (0, swagger_1.ApiParam)({ name: 'id', description: 'Room ID' }),
@@ -162,7 +162,7 @@ __decorate([
 ], RoomsController.prototype, "uploadImages", null);
 __decorate([
     (0, common_1.Delete)(':id/images/:imageId'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({ summary: 'Delete a specific room image' }),
     (0, swagger_1.ApiParam)({ name: 'id', description: 'Room ID' }),
@@ -177,7 +177,7 @@ __decorate([
 ], RoomsController.prototype, "deleteImage", null);
 __decorate([
     (0, common_1.Post)(':id/block-dates'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, swagger_1.ApiOperation)({ summary: 'Block date ranges on a specific room (manual)' }),
@@ -192,7 +192,7 @@ __decorate([
 ], RoomsController.prototype, "blockDates", null);
 __decorate([
     (0, common_1.Post)(':id/unblock-dates'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, swagger_1.ApiOperation)({ summary: 'Unblock manually blocked date ranges from a room' }),
@@ -207,7 +207,7 @@ __decorate([
 ], RoomsController.prototype, "unblockDates", null);
 __decorate([
     (0, common_1.Patch)(':id/ical-url'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, swagger_1.ApiOperation)({ summary: 'Set the iCal feed URL for a room (Airbnb, Booking.com, etc.)' }),
@@ -222,7 +222,7 @@ __decorate([
 ], RoomsController.prototype, "setIcalUrl", null);
 __decorate([
     (0, common_1.Post)(':id/sync-ical'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, swagger_1.ApiOperation)({ summary: 'Manually trigger iCal sync for a room' }),

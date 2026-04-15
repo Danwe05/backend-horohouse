@@ -63,7 +63,7 @@ export class PropertiesController {
   constructor(private readonly propertiesService: PropertiesService) { }
 
   @Post()
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiOperation({ summary: 'Create a new property' })
   @ApiBearerAuth()
   @ApiResponse({ status: 201, description: 'Property created successfully' })
@@ -389,7 +389,7 @@ export class PropertiesController {
   // ══ 4. Block dates — host only ════════════════════════════════════════════════
 
   @Post(':id/block-dates')
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Host blocks date ranges on a short-term property' })
   @ApiParam({ name: 'id', description: 'Property ID' })
@@ -407,7 +407,7 @@ export class PropertiesController {
   // ══ 5. Unblock dates — host only ══════════════════════════════════════════════
 
   @Delete(':id/block-dates')
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Host removes previously blocked date ranges' })
@@ -447,7 +447,7 @@ export class PropertiesController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiOperation({ summary: 'Update property' })
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Property ID' })
@@ -463,7 +463,7 @@ export class PropertiesController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete property' })
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Property ID' })
@@ -480,7 +480,7 @@ export class PropertiesController {
 
   // Property management endpoints for agents/admins
   @Get('my/properties')
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get current user\'s properties' })
   @ApiBearerAuth()
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -555,7 +555,7 @@ export class PropertiesController {
   }
 
   @Patch(':id/activate')
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiOperation({ summary: 'Toggle property active status' })
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Property ID' })
@@ -569,7 +569,7 @@ export class PropertiesController {
   }
 
   @Post(':id/favorite')
-  @Roles(UserRole.REGISTERED_USER, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.REGISTERED_USER, UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiOperation({ summary: 'Add property to favorites' })
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Property ID' })
@@ -585,7 +585,7 @@ export class PropertiesController {
   }
 
   @Delete(':id/favorite')
-  @Roles(UserRole.REGISTERED_USER, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.REGISTERED_USER, UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiOperation({ summary: 'Remove property from favorites' })
   @ApiBearerAuth()
   @ApiParam({ name: 'id', description: 'Property ID' })
@@ -601,7 +601,7 @@ export class PropertiesController {
   }
 
   @Get('my/favorites')
-  @Roles(UserRole.REGISTERED_USER, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.REGISTERED_USER, UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get current user\'s favorite properties' })
   @ApiBearerAuth()
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -645,7 +645,7 @@ export class PropertiesController {
   }
 
   @Post(':id/images')
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiOperation({ summary: 'Upload property images' })
   @ApiBearerAuth()
   async uploadImages(
@@ -669,7 +669,7 @@ export class PropertiesController {
   }
 
   @Delete(':id/images/:imageId')
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete property image' })
   @ApiBearerAuth()
   async deleteImage(
@@ -682,7 +682,7 @@ export class PropertiesController {
   }
 
   @Post(':id/videos')
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiOperation({ summary: 'Upload property videos' })
   @ApiBearerAuth()
   async uploadVideos(
@@ -706,7 +706,7 @@ export class PropertiesController {
   }
 
   @Delete(':id/videos/:videoId')
-  @Roles(UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete property video' })
   @ApiBearerAuth()
   async deleteVideo(

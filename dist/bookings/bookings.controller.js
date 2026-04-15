@@ -71,7 +71,7 @@ let BookingsController = class BookingsController {
 exports.BookingsController = BookingsController;
 __decorate([
     (0, common_1.Post)(),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.GUEST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.GUEST, user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({ summary: 'Request a booking for a short-term property' }),
     (0, swagger_1.ApiResponse)({ status: 201, description: 'Booking created (pending or instantly confirmed)' }),
@@ -85,7 +85,7 @@ __decorate([
 ], BookingsController.prototype, "createBooking", null);
 __decorate([
     (0, common_1.Get)('my'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.GUEST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.GUEST, user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({ summary: "Get the current user's bookings (as guest)" }),
     (0, swagger_1.ApiQuery)({ name: 'page', required: false, type: Number }),
@@ -103,7 +103,7 @@ __decorate([
 ], BookingsController.prototype, "getMyBookings", null);
 __decorate([
     (0, common_1.Patch)(':id/cancel'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.GUEST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.GUEST, user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, swagger_1.ApiOperation)({ summary: 'Cancel a booking (guest, host, or admin)' }),
@@ -120,7 +120,7 @@ __decorate([
 ], BookingsController.prototype, "cancelBooking", null);
 __decorate([
     (0, common_1.Get)('hosting'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({ summary: 'Get all bookings for properties you host' }),
     (0, swagger_1.ApiQuery)({ name: 'page', required: false, type: Number }),
@@ -138,7 +138,7 @@ __decorate([
 ], BookingsController.prototype, "getHostBookings", null);
 __decorate([
     (0, common_1.Patch)(':id/confirm'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, swagger_1.ApiOperation)({ summary: 'Host confirms a pending booking' }),
@@ -155,7 +155,7 @@ __decorate([
 ], BookingsController.prototype, "confirmBooking", null);
 __decorate([
     (0, common_1.Patch)(':id/reject'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, swagger_1.ApiOperation)({ summary: 'Host rejects a pending booking' }),
@@ -170,7 +170,7 @@ __decorate([
 ], BookingsController.prototype, "rejectBooking", null);
 __decorate([
     (0, common_1.Patch)(':id/complete'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, swagger_1.ApiOperation)({ summary: 'Host marks a stay as completed after checkout' }),
@@ -198,7 +198,7 @@ __decorate([
 ], BookingsController.prototype, "getAvailability", null);
 __decorate([
     (0, common_1.Get)('property/:propertyId'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({ summary: 'Get all bookings for a specific property (host / admin only)' }),
     (0, swagger_1.ApiParam)({ name: 'propertyId', description: 'Property ID' }),
@@ -254,7 +254,7 @@ __decorate([
 ], BookingsController.prototype, "updatePayment", null);
 __decorate([
     (0, common_1.Get)(':id'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.GUEST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.GUEST, user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({ summary: 'Get booking details (guest, host, or admin)' }),
     (0, swagger_1.ApiParam)({ name: 'id', description: 'Booking ID' }),

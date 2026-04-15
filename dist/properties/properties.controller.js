@@ -310,7 +310,7 @@ let PropertiesController = class PropertiesController {
 exports.PropertiesController = PropertiesController;
 __decorate([
     (0, common_1.Post)(),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Create a new property' }),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiResponse)({ status: 201, description: 'Property created successfully' }),
@@ -535,7 +535,7 @@ __decorate([
 ], PropertiesController.prototype, "getBlockedDates", null);
 __decorate([
     (0, common_1.Post)(':id/block-dates'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({ summary: 'Host blocks date ranges on a short-term property' }),
     (0, swagger_1.ApiParam)({ name: 'id', description: 'Property ID' }),
@@ -551,7 +551,7 @@ __decorate([
 ], PropertiesController.prototype, "blockDates", null);
 __decorate([
     (0, common_1.Delete)(':id/block-dates'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, swagger_1.ApiOperation)({ summary: 'Host removes previously blocked date ranges' }),
@@ -590,7 +590,7 @@ __decorate([
 ], PropertiesController.prototype, "findOne", null);
 __decorate([
     (0, common_1.Patch)(':id'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Update property' }),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiParam)({ name: 'id', description: 'Property ID' }),
@@ -606,7 +606,7 @@ __decorate([
 ], PropertiesController.prototype, "update", null);
 __decorate([
     (0, common_1.Delete)(':id'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Delete property' }),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiParam)({ name: 'id', description: 'Property ID' }),
@@ -621,7 +621,7 @@ __decorate([
 ], PropertiesController.prototype, "remove", null);
 __decorate([
     (0, common_1.Get)('my/properties'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Get current user\'s properties' }),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiQuery)({ name: 'page', required: false, type: Number }),
@@ -669,7 +669,7 @@ __decorate([
 ], PropertiesController.prototype, "toggleVerified", null);
 __decorate([
     (0, common_1.Patch)(':id/activate'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Toggle property active status' }),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiParam)({ name: 'id', description: 'Property ID' }),
@@ -683,7 +683,7 @@ __decorate([
 ], PropertiesController.prototype, "toggleActive", null);
 __decorate([
     (0, common_1.Post)(':id/favorite'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Add property to favorites' }),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiParam)({ name: 'id', description: 'Property ID' }),
@@ -697,7 +697,7 @@ __decorate([
 ], PropertiesController.prototype, "addToFavorites", null);
 __decorate([
     (0, common_1.Delete)(':id/favorite'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Remove property from favorites' }),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiParam)({ name: 'id', description: 'Property ID' }),
@@ -711,7 +711,7 @@ __decorate([
 ], PropertiesController.prototype, "removeFromFavorites", null);
 __decorate([
     (0, common_1.Get)('my/favorites'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.REGISTERED_USER, user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Get current user\'s favorite properties' }),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiQuery)({ name: 'page', required: false, type: Number }),
@@ -741,7 +741,7 @@ __decorate([
 ], PropertiesController.prototype, "getSimilarProperties", null);
 __decorate([
     (0, common_1.Post)(':id/images'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Upload property images' }),
     (0, swagger_1.ApiBearerAuth)(),
     __param(0, (0, common_1.Param)('id')),
@@ -752,7 +752,7 @@ __decorate([
 ], PropertiesController.prototype, "uploadImages", null);
 __decorate([
     (0, common_1.Delete)(':id/images/:imageId'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Delete property image' }),
     (0, swagger_1.ApiBearerAuth)(),
     __param(0, (0, common_1.Param)('id')),
@@ -764,7 +764,7 @@ __decorate([
 ], PropertiesController.prototype, "deleteImage", null);
 __decorate([
     (0, common_1.Post)(':id/videos'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Upload property videos' }),
     (0, swagger_1.ApiBearerAuth)(),
     __param(0, (0, common_1.Param)('id')),
@@ -775,7 +775,7 @@ __decorate([
 ], PropertiesController.prototype, "uploadVideos", null);
 __decorate([
     (0, common_1.Delete)(':id/videos/:videoId'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Delete property video' }),
     (0, swagger_1.ApiBearerAuth)(),
     __param(0, (0, common_1.Param)('id')),

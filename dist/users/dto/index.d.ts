@@ -1,4 +1,4 @@
-import { UserRole } from '../schemas/user.schema';
+import { UserRole, PayoutMethod } from '../schemas/user.schema';
 export declare class LocationDto {
     type?: 'Point';
     coordinates: [number, number];
@@ -113,6 +113,12 @@ export declare class UserStatsDto {
     total: number;
     active: number;
     agents: number;
+    landlords: number;
+    hosts: number;
+    students: number;
+    guests: number;
+    superhosts: number;
+    pendingHostVerifications: number;
     verified: number;
     recent: number;
     byRole: Record<string, number>;
@@ -140,5 +146,48 @@ export declare class UpdateTenantDto {
     depositAmount?: number;
     status?: 'active' | 'ended' | 'pending';
     notes?: string;
+}
+export declare class SetRoleDto {
+    role: UserRole;
+}
+export declare class PayoutAccountDto {
+    method: PayoutMethod;
+    accountIdentifier: string;
+    providerName?: string;
+    isDefault?: boolean;
+    currency?: string;
+}
+export declare class UpdateHostProfileDto {
+    instantBookEnabled?: boolean;
+    minNightsDefault?: number;
+    maxNightsDefault?: number;
+    advanceNoticeHours?: number;
+    bookingWindowMonths?: number;
+    petsAllowedDefault?: boolean;
+    smokingAllowedDefault?: boolean;
+    eventsAllowedDefault?: boolean;
+    checkInTimeDefault?: string;
+    checkOutTimeDefault?: string;
+    addPayoutAccount?: PayoutAccountDto;
+    removePayoutAccountIdentifier?: string;
+    addCoHostId?: string;
+    removeCoHostId?: string;
+    hostBio?: string;
+    hostLanguages?: string[];
+    operatingCity?: string;
+}
+export declare class VerifyHostDto {
+    decision: 'approve' | 'reject';
+    rejectionReason?: string;
+}
+export declare class RecordHostPayoutDto {
+    amount: number;
+    currency: string;
+    method: PayoutMethod;
+    reference?: string;
+    status: 'pending' | 'processing' | 'paid' | 'failed';
+    initiatedAt: Date;
+    completedAt?: Date;
+    failureReason?: string;
 }
 export {};

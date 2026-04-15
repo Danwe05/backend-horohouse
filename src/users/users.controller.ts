@@ -23,7 +23,7 @@ import {
 } from '@nestjs/swagger';
 
 import { UsersService } from './users.service';
-import { CreateUserDto, UpdateUserDto, UpdatePreferencesDto, CreateTenantDto, UpdateTenantDto } from './dto';
+import { CreateUserDto, UpdateUserDto, UpdatePreferencesDto, CreateTenantDto, UpdateTenantDto, SetRoleDto, UpdateHostProfileDto, VerifyHostDto, RecordHostPayoutDto } from './dto';
 import { User, UserRole } from './schemas/user.schema';
 import { Roles } from '../auth/guards/roles.guard';
 import { Public } from '../auth/guards/roles.guard';
@@ -191,10 +191,16 @@ export class UsersController {
   }
 
   @Patch('me/role')
-  @ApiOperation({ summary: 'Toggle role between USER, AGENT, and LANDLORD' })
-  @ApiResponse({ status: 200, description: 'Role toggled successfully' })
-  async toggleMyRole(@Req() req: any): Promise<User> {
-    return this.usersService.toggleRole(req.user.id);
+  @ApiOperation({ summary: 'Set role explicitly (REGISTERED_USER | AGENT | LANDLORD | HOST | GUEST | STUDENT). ADMIN cannot be assigned here.' })
+  @ApiResponse({ status: 200, description: 'Role updated successfully' })
+  async setMyRole(
+    @Req() req: any,
+    @Body() body: SetRoleDto,
+  ): Promise<User> {
+    if (!body.role) {
+      throw new BadRequestException('role is required in request body');
+    }
+    return this.usersService.setRole(req.user.id, body.role);
   }
 
   // ==========================================
@@ -436,6 +442,98 @@ export class UsersController {
       limit: limit ? parseInt(limit.toString()) : 100,
     });
   }
+
+  // ==========================================
+  // HOST PUBLIC ROUTES
+  // ==========================================
+
+  @Get('hosts')
+  @Public()
+  @ApiOperation({ summary: 'Get all active hosts with short-term listing stats' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Hosts retrieved successfully' })
+  async getHosts(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.usersService.getHosts(
+      page ? parseInt(page.toString()) : 1,
+      limit ? parseInt(limit.toString()) : 10,
+    );
+  }
+
+  @Get('hosts/:id')
+  @Public()
+  @ApiOperation({ summary: 'Get host by ID with full profile (sensitive fields stripped)' })
+  @ApiResponse({ status: 200, description: 'Host profile retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Host not found' })
+  async getHostById(@Param('id') id: string) {
+    return this.usersService.getHostById(id);
+  }
+
+  @Get('hosts/:id/stats')
+  @ApiOperation({ summary: 'Get live dashboard stats for a host' })
+  @ApiResponse({ status: 200, description: 'Host stats retrieved successfully' })
+  async getHostStats(@Param('id') id: string) {
+    return this.usersService.getHostStats(id);
+  }
+
+  // ==========================================
+  // HOST MANAGEMENT — authenticated host actions
+  // ==========================================
+
+  @Patch('hosts/:id/profile')
+  @Roles(UserRole.HOST, UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Update host profile fields — preferences, house rules, payout accounts, co-hosts, bio',
+  })
+  @ApiResponse({ status: 200, description: 'Host profile updated' })
+  async updateHostProfile(
+    @Param('id') id: string,
+    @Body() body: UpdateHostProfileDto,
+  ) {
+    // Note: governmentIdBuffer must come via a dedicated multipart upload endpoint.
+    return this.usersService.updateHostProfile(id, body);
+  }
+
+  // ==========================================
+  // HOST ADMIN ROUTES
+  // ==========================================
+
+  @Patch('hosts/:id/verify')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Approve or reject a host identity verification (Admin only)' })
+  @ApiResponse({ status: 200, description: 'Verification decision applied' })
+  async verifyHost(
+    @Param('id') id: string,
+    @Body() body: VerifyHostDto,
+  ) {
+    return this.usersService.verifyHost(id, body.decision, body.rejectionReason);
+  }
+
+  @Post('hosts/:id/superhost/recalculate')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Manually trigger Superhost status recalculation (Admin only)' })
+  @ApiResponse({ status: 200, description: 'Superhost status recalculated' })
+  async recalculateSuperhostStatus(@Param('id') id: string) {
+    return this.usersService.recalculateSuperhostStatus(id);
+  }
+
+  @Post('hosts/:id/payouts')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Record a host payout — called internally by payments service (Admin only)' })
+  @ApiResponse({ status: 201, description: 'Payout recorded successfully' })
+  async recordHostPayout(
+    @Param('id') id: string,
+    @Body() record: RecordHostPayoutDto,
+  ) {
+    return this.usersService.recordHostPayout(id, record);
+  }
+
+  // ==========================================
+  // GENERIC ADMIN ROUTES — keep at end to avoid shadowing named routes
+  // ==========================================
 
   @Get(':id')
   @Public()

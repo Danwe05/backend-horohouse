@@ -266,7 +266,7 @@ __decorate([
 ], ReviewsController.prototype, "update", null);
 __decorate([
     (0, common_1.Post)(':id/respond'),
-    (0, roles_guard_1.Roles)(user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({ summary: 'Respond to a review (host, agent, or admin)' }),
     (0, swagger_1.ApiParam)({ name: 'id' }),

@@ -14,18 +14,28 @@ const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 var BillingCycle;
 (function (BillingCycle) {
+    BillingCycle["WEEKLY"] = "weekly";
     BillingCycle["MONTHLY"] = "monthly";
     BillingCycle["QUARTERLY"] = "quarterly";
     BillingCycle["YEARLY"] = "yearly";
 })(BillingCycle || (exports.BillingCycle = BillingCycle = {}));
 var SubscriptionPlan;
 (function (SubscriptionPlan) {
-    SubscriptionPlan["FREE"] = "free";
-    SubscriptionPlan["BASIC"] = "basic";
-    SubscriptionPlan["PREMIUM"] = "premium";
-    SubscriptionPlan["PROFESSIONAL"] = "professional";
-    SubscriptionPlan["AGENCY"] = "agency";
-    SubscriptionPlan["ENTERPRISE"] = "enterprise";
+    SubscriptionPlan["STUDENT_FREE"] = "student_free";
+    SubscriptionPlan["USER_FREE"] = "user_free";
+    SubscriptionPlan["USER_PREMIUM"] = "user_premium";
+    SubscriptionPlan["AGENT_FREE"] = "agent_free";
+    SubscriptionPlan["AGENT_BASIC"] = "agent_basic";
+    SubscriptionPlan["AGENT_PRO"] = "agent_pro";
+    SubscriptionPlan["AGENT_ELITE"] = "agent_elite";
+    SubscriptionPlan["LANDLORD_FREE"] = "landlord_free";
+    SubscriptionPlan["LANDLORD_BASIC"] = "landlord_basic";
+    SubscriptionPlan["LANDLORD_PRO"] = "landlord_pro";
+    SubscriptionPlan["HOST_FREE"] = "host_free";
+    SubscriptionPlan["HOST_STARTER"] = "host_starter";
+    SubscriptionPlan["HOST_GROWTH"] = "host_growth";
+    SubscriptionPlan["HOST_PRO"] = "host_pro";
+    SubscriptionPlan["HOST_ELITE"] = "host_elite";
 })(SubscriptionPlan || (exports.SubscriptionPlan = SubscriptionPlan = {}));
 var SubscriptionStatus;
 (function (SubscriptionStatus) {
@@ -53,6 +63,7 @@ let Subscription = class Subscription {
     lastPaymentDate;
     cancelledAt;
     cancellationReason;
+    scheduledCancellationDate;
     previousSubscriptionId;
     upgradedFrom;
     providerSubscriptionId;
@@ -130,6 +141,10 @@ __decorate([
     __metadata("design:type", String)
 ], Subscription.prototype, "cancellationReason", void 0);
 __decorate([
+    (0, mongoose_1.Prop)(),
+    __metadata("design:type", Date)
+], Subscription.prototype, "scheduledCancellationDate", void 0);
+__decorate([
     (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Subscription' }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], Subscription.prototype, "previousSubscriptionId", void 0);
@@ -152,4 +167,5 @@ exports.SubscriptionSchema = mongoose_1.SchemaFactory.createForClass(Subscriptio
 exports.SubscriptionSchema.index({ userId: 1 });
 exports.SubscriptionSchema.index({ plan: 1, status: 1 });
 exports.SubscriptionSchema.index({ status: 1, endDate: 1 });
+exports.SubscriptionSchema.index({ scheduledCancellationDate: 1 }, { sparse: true });
 //# sourceMappingURL=subscription.schema.js.map

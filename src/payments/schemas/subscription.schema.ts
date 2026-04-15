@@ -3,20 +3,38 @@ import { Document, Types } from 'mongoose';
 
 export type SubscriptionDocument = Subscription & Document;
 
-// Export BillingCycle enum
 export enum BillingCycle {
+  WEEKLY = 'weekly',
   MONTHLY = 'monthly',
   QUARTERLY = 'quarterly',
   YEARLY = 'yearly',
 }
 
 export enum SubscriptionPlan {
-  FREE = 'free',
-  BASIC = 'basic',
-  PREMIUM = 'premium',
-  PROFESSIONAL = 'professional',
-  AGENCY = 'agency',
-  ENTERPRISE = 'enterprise',
+  // STUDENT
+  STUDENT_FREE = 'student_free',
+
+  // USER
+  USER_FREE = 'user_free',
+  USER_PREMIUM = 'user_premium',
+
+  // AGENT
+  AGENT_FREE = 'agent_free',
+  AGENT_BASIC = 'agent_basic',
+  AGENT_PRO = 'agent_pro',
+  AGENT_ELITE = 'agent_elite',
+
+  // LANDLORD
+  LANDLORD_FREE = 'landlord_free',
+  LANDLORD_BASIC = 'landlord_basic',
+  LANDLORD_PRO = 'landlord_pro',
+
+  // HOST
+  HOST_FREE = 'host_free',
+  HOST_STARTER = 'host_starter',
+  HOST_GROWTH = 'host_growth',
+  HOST_PRO = 'host_pro',
+  HOST_ELITE = 'host_elite',
 }
 
 export enum SubscriptionStatus {
@@ -28,6 +46,7 @@ export enum SubscriptionStatus {
 }
 
 export type SubscriptionFeatures = {
+  // Generic fields
   maxListings?: number;
   maxActiveListings?: number;
   canBoostListings?: boolean;
@@ -42,6 +61,15 @@ export type SubscriptionFeatures = {
   socialMediaIntegration?: boolean;
   leadGeneration?: boolean;
   whiteLabel?: boolean;
+  // Landlord / Host specific fields
+  role?: 'landlord' | 'agent' | 'student' | 'user' | 'host';
+  maxProperties?: number;       // -1 = unlimited
+  bookingCalendar?: boolean;
+  shortTermRentalSupport?: boolean;
+  smartPricing?: boolean;       // AI-based pricing
+  maintenanceTracking?: boolean;
+  premiumVisibility?: boolean;
+  dedicatedSupport?: boolean;
   [key: string]: any;
 };
 
@@ -101,6 +129,15 @@ export class Subscription {
   @Prop()
   cancellationReason?: string;
 
+  /**
+   * Set when a user cancels but elects to remain active until the end of
+   * the current billing period (cancelImmediately = false).
+   * The expiration cron uses autoRenew=false to expire the subscription;
+   * this field makes the scheduled intent explicit and queryable.
+   */
+  @Prop()
+  scheduledCancellationDate?: Date;
+
   // Upgrade/downgrade tracking
   @Prop({ type: Types.ObjectId, ref: 'Subscription' })
   previousSubscriptionId?: Types.ObjectId;
@@ -123,4 +160,5 @@ export const SubscriptionSchema = SchemaFactory.createForClass(Subscription);
 // Indexes
 SubscriptionSchema.index({ userId: 1 });
 SubscriptionSchema.index({ plan: 1, status: 1 });
-SubscriptionSchema.index({ status: 1, endDate: 1 }); // For expiration checks
+SubscriptionSchema.index({ status: 1, endDate: 1 });
+SubscriptionSchema.index({ scheduledCancellationDate: 1 }, { sparse: true }); // for querying pending cancellations

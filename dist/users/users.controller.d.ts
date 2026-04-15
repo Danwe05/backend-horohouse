@@ -1,5 +1,5 @@
 import { UsersService } from './users.service';
-import { CreateUserDto, UpdateUserDto, UpdatePreferencesDto, CreateTenantDto, UpdateTenantDto } from './dto';
+import { CreateUserDto, UpdateUserDto, UpdatePreferencesDto, CreateTenantDto, UpdateTenantDto, SetRoleDto, UpdateHostProfileDto, VerifyHostDto, RecordHostPayoutDto } from './dto';
 import { User, UserRole } from './schemas/user.schema';
 export declare class UsersController {
     private readonly usersService;
@@ -25,7 +25,7 @@ export declare class UsersController {
     updatePreferences(req: any, preferences: UpdatePreferencesDto): Promise<User>;
     uploadProfilePicture(req: any): Promise<User>;
     updateMe(req: any, updateUserDto: UpdateUserDto): Promise<User>;
-    toggleMyRole(req: any): Promise<User>;
+    setMyRole(req: any, body: SetRoleDto): Promise<User>;
     getMyTenants(req: any): Promise<{
         tenants: import("./schemas/user.schema").TenantRecord[];
     }>;
@@ -52,6 +52,17 @@ export declare class UsersController {
     getLandlordById(id: string): Promise<any>;
     getLandlordStats(id: string): Promise<any>;
     getLandlordProperties(id: string, status?: string, page?: number, limit?: number): Promise<any>;
+    getHosts(page?: number, limit?: number): Promise<any>;
+    getHostById(id: string): Promise<any>;
+    getHostStats(id: string): Promise<any>;
+    updateHostProfile(id: string, body: UpdateHostProfileDto): Promise<any>;
+    verifyHost(id: string, body: VerifyHostDto): Promise<any>;
+    recalculateSuperhostStatus(id: string): Promise<{
+        isSuperhost: boolean;
+        reason?: string;
+        superhostSince?: Date;
+    }>;
+    recordHostPayout(id: string, record: RecordHostPayoutDto): Promise<any>;
     findOne(id: string): Promise<User>;
     update(id: string, updateUserDto: UpdateUserDto): Promise<User>;
     remove(id: string): Promise<void>;
