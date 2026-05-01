@@ -196,6 +196,7 @@ let AuthController = class AuthController {
     }
     async googleAuthRedirect(req, res) {
         const googleUser = req.user;
+        const state = req.query?.state;
         try {
             const authResult = await this.authService.googleAuth({
                 googleId: googleUser.id,
@@ -203,14 +204,26 @@ let AuthController = class AuthController {
                 name: googleUser.displayName,
                 picture: googleUser.picture,
             }, req);
-            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-            const redirectUrl = `${frontendUrl}/auth/callback?token=${authResult.accessToken}&refresh=${authResult.refreshToken}`;
+            let redirectUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            if (state && (state.startsWith('exp://') || state.startsWith('horohouse://') || state.startsWith('http'))) {
+                const separator = state.includes('?') ? '&' : '?';
+                redirectUrl = `${state}${separator}token=${authResult.accessToken}&refresh=${authResult.refreshToken}`;
+            }
+            else {
+                redirectUrl = `${redirectUrl}/auth/callback?token=${authResult.accessToken}&refresh=${authResult.refreshToken}`;
+            }
             res.redirect(redirectUrl, 302);
             return res;
         }
         catch (error) {
-            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-            const errorUrl = `${frontendUrl}/auth/login?error=oauth_failed`;
+            let errorUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            if (state && (state.startsWith('exp://') || state.startsWith('horohouse://') || state.startsWith('http'))) {
+                const separator = state.includes('?') ? '&' : '?';
+                errorUrl = `${state}${separator}error=oauth_failed`;
+            }
+            else {
+                errorUrl = `${errorUrl}/auth/login?error=oauth_failed`;
+            }
             res.redirect(errorUrl, 302);
             return res;
         }

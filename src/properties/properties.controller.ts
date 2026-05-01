@@ -12,6 +12,7 @@ import {
   BadRequestException,
   HttpCode,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { FastifyRequest } from 'fastify';
@@ -60,6 +61,8 @@ class UpdatePropertyRequestDto extends CreatePropertyRequestDto {
 @Controller('properties')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class PropertiesController {
+  private readonly logger = new Logger(PropertiesController.name);
+
   constructor(private readonly propertiesService: PropertiesService) { }
 
   @Post()
@@ -520,10 +523,8 @@ export class PropertiesController {
     }
 
     // Log for debugging
-    console.log('User ID:', userId, 'Type:', typeof userId);
-    console.log('Full user object:', JSON.stringify(req.user, null, 2));
-
-    return this.propertiesService.getMyProperties(filters, options, userId, req.user);
+    this.logger.debug(`Fetching properties for user ${userId}`);
+    return this.propertiesService.getMyProperties(filters, options, userId);
   }
 
   @Patch(':id/feature')

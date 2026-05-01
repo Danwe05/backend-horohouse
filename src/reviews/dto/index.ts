@@ -100,6 +100,11 @@ export class CreateReviewDto {
   @IsMongoId()
   bookingId?: string;
 
+  @ApiPropertyOptional({ description: 'Required for reviewType = insight' })
+  @IsOptional()
+  @IsMongoId()
+  insightId?: string;
+
   // ── Ratings ───────────────────────────────────────────────────────────────
 
   @ApiProperty({ example: 5, description: 'Overall rating 1–5' })

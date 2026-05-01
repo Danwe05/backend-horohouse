@@ -3,7 +3,8 @@ export declare enum ReviewType {
     PROPERTY = "property",
     AGENT = "agent",
     STAY = "stay",
-    GUEST = "guest"
+    GUEST = "guest",
+    INSIGHT = "insight"
 }
 export declare enum ReviewerRole {
     GUEST = "guest",
@@ -17,6 +18,7 @@ export declare class Review {
     propertyId?: Types.ObjectId;
     agentId?: Types.ObjectId;
     bookingId?: Types.ObjectId;
+    insightId?: Types.ObjectId;
     reviewedUserId?: Types.ObjectId;
     rating: number;
     staySubRatings?: {

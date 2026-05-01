@@ -342,7 +342,14 @@ export class CreatePropertyDto {
   @IsEnum(PropertyStatus)
   status?: PropertyStatus;
 
+  @ApiPropertyOptional({ type: [Object] })
+  @IsOptional()
+  @IsArray()
   images?: any[];
+
+  @ApiPropertyOptional({ type: [Object] })
+  @IsOptional()
+  @IsArray()
   videos?: any[];
 }
 

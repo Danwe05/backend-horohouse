@@ -18,6 +18,7 @@ export declare class CreateReviewDto {
     propertyId?: string;
     agentId?: string;
     bookingId?: string;
+    insightId?: string;
     rating: number;
     staySubRatings?: StaySubRatingsDto;
     guestSubRatings?: GuestSubRatingsDto;

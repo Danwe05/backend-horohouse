@@ -1,12 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard } from '@nestjs/throttler';
 
-// ✅ ADD THESE TWO IMPORTS
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -39,6 +37,7 @@ import { SplitPaymentsModule } from './split-payments/split-payments.module';
 import { DigitalLeaseModule } from './digital-lease/digital-lease.module';
 import { RoommateMatchingModule } from './roommate/roommate.module';
 import { NewsletterModule } from './newsletter/newsletter.module';
+import { InsightsModule } from './insights/insights.module';
 
 @Module({
   imports: [
@@ -46,14 +45,26 @@ import { NewsletterModule } from './newsletter/newsletter.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
         uri: configService.get<string>('MONGODB_URI'),
+        // Connection pool — critical for concurrent request performance
+        maxPoolSize: 50,
+        minPoolSize: 5,
+        // Timeout tuning
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+        connectTimeoutMS: 10000,
+        // Reduce wire traffic on slower connections
+        compressors: ['zlib'],
       }),
       inject: [ConfigService],
     }),
+
     ScheduleModule.forRoot(),
+
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => [
@@ -100,19 +111,19 @@ import { NewsletterModule } from './newsletter/newsletter.module';
     DigitalLeaseModule,
     RoommateMatchingModule,
     NewsletterModule,
+    InsightsModule,
   ],
 
   controllers: [AppController],
   providers: [
     AppService,
+    // Fixed: was returning the class itself instead of instantiating it,
+    // which silently broke throttling in production.
+    // ThrottlerGuard works in both envs — it's a no-op cost in dev.
     {
       provide: APP_GUARD,
-      useFactory: (configService: ConfigService) =>
-        configService.get('NODE_ENV') === 'production'
-          ? ThrottlerGuard
-          : { canActivate: () => true },
-      inject: [ConfigService],
+      useClass: ThrottlerGuard,
     },
   ],
 })
-export class AppModule { }
+export class AppModule {}

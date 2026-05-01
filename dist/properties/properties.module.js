@@ -22,6 +22,7 @@ const user_schema_1 = require("../users/schemas/user.schema");
 const history_module_1 = require("../history/history.module");
 const notifications_module_1 = require("../notifications/notifications.module");
 const user_interactions_module_1 = require("../user-interactions/user-interactions.module");
+const watermark_service_1 = require("../watermark/watermark.service");
 let PropertiesModule = class PropertiesModule {
 };
 exports.PropertiesModule = PropertiesModule;
@@ -39,7 +40,7 @@ exports.PropertiesModule = PropertiesModule = __decorate([
             user_interactions_module_1.UserInteractionsModule,
         ],
         controllers: [properties_controller_1.PropertiesController, inquiry_controller_1.InquiryController, comparison_controller_1.ComparisonController],
-        providers: [properties_service_1.PropertiesService, inquiry_service_1.InquiryService, comparison_service_1.ComparisonService],
+        providers: [properties_service_1.PropertiesService, inquiry_service_1.InquiryService, comparison_service_1.ComparisonService, watermark_service_1.WatermarkService],
         exports: [properties_service_1.PropertiesService, inquiry_service_1.InquiryService, comparison_service_1.ComparisonService],
     })
 ], PropertiesModule);

@@ -24,6 +24,7 @@ export interface ReviewFilters {
   propertyId?: string;
   agentId?: string;
   bookingId?: string;
+  insightId?: string;
   reviewedUserId?: string;
   minRating?: number;
   maxRating?: number;
@@ -62,6 +63,9 @@ export class ReviewsService {
       if (reviewType === ReviewType.STAY || reviewType === ReviewType.GUEST) {
         return this.createBookingReview(createReviewDto, user);
       }
+      if (reviewType === ReviewType.INSIGHT) {
+        return this.createInsightReview(createReviewDto, user);
+      }
 
       // ── Existing: property and agent reviews ─────────────────────────────
       return this.createStandardReview(createReviewDto, user);
@@ -69,6 +73,48 @@ export class ReviewsService {
       this.logger.error('Error creating review:', error);
       throw error;
     }
+  }
+
+  // ─── Insight review ─────────────────────────────────────────────────────────
+
+  private async createInsightReview(
+    dto: CreateReviewDto,
+    user: User,
+  ): Promise<Review> {
+    if (!dto.insightId) {
+      throw new BadRequestException('insightId is required for insight reviews');
+    }
+
+    // Since this is for Article Comments, we may not restrict duplicates like we do for standard reviews,
+    // or maybe we do depending on requirements. Standard article comments allow multiple per user.
+    // For now, let's allow multiple comments per user on an article.
+
+    // Validate article exists
+    const PostModel = this.reviewModel.db.model('Post'); // Because ReviewService might not have injected PostModel directly
+    const post = await PostModel.findById(dto.insightId);
+    if (!post) throw new NotFoundException('Insight/Article not found');
+
+    const review = new this.reviewModel({
+      userId: user._id,
+      userName: user.name,
+      reviewType: dto.reviewType,
+      reviewerRole: ReviewerRole.GUEST, // treat commenter as guest role safely
+      insightId: new Types.ObjectId(dto.insightId),
+      rating: dto.rating, // rating can be optional if the UI just sends 5, but DTO requires 1-5
+      comment: dto.comment,
+      images: dto.images ?? [],
+      verified: true,
+      bookingVerified: false,
+      isPublished: true, // Auto-publish article comments
+    });
+
+    const saved = await review.save();
+
+    // Increment comment count on the post
+    await PostModel.findByIdAndUpdate(dto.insightId, { $inc: { commentCount: 1 } });
+
+    this.logger.log(`Insight review created: ${saved._id} by user ${user._id}`);
+    return saved;
   }
 
   // ─── Standard review (existing logic, unchanged) ──────────────────────────
@@ -294,6 +340,7 @@ export class ReviewsService {
     if (filters.propertyId) query.propertyId = new Types.ObjectId(filters.propertyId);
     if (filters.agentId) query.agentId = new Types.ObjectId(filters.agentId);
     if (filters.bookingId) query.bookingId = new Types.ObjectId(filters.bookingId);
+    if (filters.insightId) query.insightId = new Types.ObjectId(filters.insightId);
     if (filters.reviewedUserId) query.reviewedUserId = new Types.ObjectId(filters.reviewedUserId);
     if (filters.minRating || filters.maxRating) {
       query.rating = {};
@@ -369,6 +416,10 @@ export class ReviewsService {
     const subRatingAverages = this.calculateSubRatingAverages(stayReviews);
 
     return { ...base, subRatingAverages };
+  }
+
+  async getInsightReviews(insightId: string, options: ReviewOptions = {}): Promise<any> {
+    return this.findAll({ reviewType: ReviewType.INSIGHT, insightId }, options);
   }
 
   async getAgentReviews(agentId: string, options: ReviewOptions = {}): Promise<any> {

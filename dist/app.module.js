@@ -13,7 +13,6 @@ const mongoose_1 = require("@nestjs/mongoose");
 const throttler_1 = require("@nestjs/throttler");
 const schedule_1 = require("@nestjs/schedule");
 const core_1 = require("@nestjs/core");
-const throttler_2 = require("@nestjs/throttler");
 const app_controller_1 = require("./app.controller");
 const app_service_1 = require("./app.service");
 const auth_module_1 = require("./auth/auth.module");
@@ -44,6 +43,7 @@ const split_payments_module_1 = require("./split-payments/split-payments.module"
 const digital_lease_module_1 = require("./digital-lease/digital-lease.module");
 const roommate_module_1 = require("./roommate/roommate.module");
 const newsletter_module_1 = require("./newsletter/newsletter.module");
+const insights_module_1 = require("./insights/insights.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -58,6 +58,12 @@ exports.AppModule = AppModule = __decorate([
                 imports: [config_1.ConfigModule],
                 useFactory: async (configService) => ({
                     uri: configService.get('MONGODB_URI'),
+                    maxPoolSize: 50,
+                    minPoolSize: 5,
+                    serverSelectionTimeoutMS: 5000,
+                    socketTimeoutMS: 45000,
+                    connectTimeoutMS: 10000,
+                    compressors: ['zlib'],
                 }),
                 inject: [config_1.ConfigService],
             }),
@@ -106,16 +112,14 @@ exports.AppModule = AppModule = __decorate([
             digital_lease_module_1.DigitalLeaseModule,
             roommate_module_1.RoommateMatchingModule,
             newsletter_module_1.NewsletterModule,
+            insights_module_1.InsightsModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [
             app_service_1.AppService,
             {
                 provide: core_1.APP_GUARD,
-                useFactory: (configService) => configService.get('NODE_ENV') === 'production'
-                    ? throttler_2.ThrottlerGuard
-                    : { canActivate: () => true },
-                inject: [config_1.ConfigService],
+                useClass: throttler_1.ThrottlerGuard,
             },
         ],
     })

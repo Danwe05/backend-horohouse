@@ -34,4 +34,7 @@ export declare class BookingsController {
     getBookingById(id: string, req: FastifyRequest & {
         user: User;
     }): Promise<import("./schema/booking.schema").Booking>;
+    getHostStats(req: FastifyRequest & {
+        user: User;
+    }): Promise<import("./dto/host-stats.dto").HostStatsDto>;
 }

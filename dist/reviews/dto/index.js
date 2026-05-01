@@ -113,6 +113,7 @@ class CreateReviewDto {
     propertyId;
     agentId;
     bookingId;
+    insightId;
     rating;
     staySubRatings;
     guestSubRatings;
@@ -152,6 +153,12 @@ __decorate([
     (0, class_validator_1.IsMongoId)(),
     __metadata("design:type", String)
 ], CreateReviewDto.prototype, "bookingId", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: 'Required for reviewType = insight' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsMongoId)(),
+    __metadata("design:type", String)
+], CreateReviewDto.prototype, "insightId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({ example: 5, description: 'Overall rating 1–5' }),
     (0, class_validator_1.IsNumber)(),

@@ -13,6 +13,7 @@ import { User, UserSchema } from '../users/schemas/user.schema';
 import { HistoryModule } from '../history/history.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { UserInteractionsModule } from '../user-interactions/user-interactions.module';
+import { WatermarkService } from 'src/watermark/watermark.service';
 
 @Module({
   imports: [
@@ -27,7 +28,7 @@ import { UserInteractionsModule } from '../user-interactions/user-interactions.m
     UserInteractionsModule,
   ],
   controllers: [PropertiesController, InquiryController, ComparisonController],
-  providers: [PropertiesService, InquiryService, ComparisonService],
+  providers: [PropertiesService, InquiryService, ComparisonService, WatermarkService],
   exports: [PropertiesService, InquiryService, ComparisonService],
 })
 export class PropertiesModule {}

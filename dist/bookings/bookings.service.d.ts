@@ -5,6 +5,7 @@ import { User, UserDocument } from '../users/schemas/user.schema';
 import { RoomsService } from '../rooms/rooms.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateBookingDto, CancelBookingDto, RespondToBookingDto, UpdatePaymentDto, BookingQueryDto } from './dto/booking.dto';
+import { HostStatsDto } from './dto/host-stats.dto';
 export interface PaginatedBookings {
     bookings: Booking[];
     total: number;
@@ -38,6 +39,7 @@ export declare class BookingsService {
     completeBooking(bookingId: string, host: User): Promise<Booking>;
     getHostBookings(hostId: string, query: BookingQueryDto): Promise<PaginatedBookings>;
     getPropertyBookings(propertyId: string, query: BookingQueryDto): Promise<PaginatedBookings>;
+    getHostStats(hostId: string): Promise<HostStatsDto>;
     getAvailability(propertyId: string, from: Date, to: Date, roomId?: string): Promise<AvailabilityResult>;
     getAllBookings(query: BookingQueryDto): Promise<PaginatedBookings>;
     getBookingById(bookingId: string, user: User): Promise<Booking>;

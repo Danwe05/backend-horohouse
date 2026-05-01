@@ -18,6 +18,7 @@ var ReviewType;
     ReviewType["AGENT"] = "agent";
     ReviewType["STAY"] = "stay";
     ReviewType["GUEST"] = "guest";
+    ReviewType["INSIGHT"] = "insight";
 })(ReviewType || (exports.ReviewType = ReviewType = {}));
 var ReviewerRole;
 (function (ReviewerRole) {
@@ -32,6 +33,7 @@ let Review = class Review {
     propertyId;
     agentId;
     bookingId;
+    insightId;
     reviewedUserId;
     rating;
     staySubRatings;
@@ -78,6 +80,10 @@ __decorate([
     (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Booking' }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], Review.prototype, "bookingId", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Post' }),
+    __metadata("design:type", mongoose_2.Types.ObjectId)
+], Review.prototype, "insightId", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'User' }),
     __metadata("design:type", mongoose_2.Types.ObjectId)

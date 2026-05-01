@@ -40,12 +40,41 @@ let ReviewsService = ReviewsService_1 = class ReviewsService {
             if (reviewType === review_schema_1.ReviewType.STAY || reviewType === review_schema_1.ReviewType.GUEST) {
                 return this.createBookingReview(createReviewDto, user);
             }
+            if (reviewType === review_schema_1.ReviewType.INSIGHT) {
+                return this.createInsightReview(createReviewDto, user);
+            }
             return this.createStandardReview(createReviewDto, user);
         }
         catch (error) {
             this.logger.error('Error creating review:', error);
             throw error;
         }
+    }
+    async createInsightReview(dto, user) {
+        if (!dto.insightId) {
+            throw new common_1.BadRequestException('insightId is required for insight reviews');
+        }
+        const PostModel = this.reviewModel.db.model('Post');
+        const post = await PostModel.findById(dto.insightId);
+        if (!post)
+            throw new common_1.NotFoundException('Insight/Article not found');
+        const review = new this.reviewModel({
+            userId: user._id,
+            userName: user.name,
+            reviewType: dto.reviewType,
+            reviewerRole: review_schema_1.ReviewerRole.GUEST,
+            insightId: new mongoose_2.Types.ObjectId(dto.insightId),
+            rating: dto.rating,
+            comment: dto.comment,
+            images: dto.images ?? [],
+            verified: true,
+            bookingVerified: false,
+            isPublished: true,
+        });
+        const saved = await review.save();
+        await PostModel.findByIdAndUpdate(dto.insightId, { $inc: { commentCount: 1 } });
+        this.logger.log(`Insight review created: ${saved._id} by user ${user._id}`);
+        return saved;
     }
     async createStandardReview(dto, user) {
         if (dto.reviewType === review_schema_1.ReviewType.PROPERTY && !dto.propertyId) {
@@ -192,6 +221,8 @@ let ReviewsService = ReviewsService_1 = class ReviewsService {
             query.agentId = new mongoose_2.Types.ObjectId(filters.agentId);
         if (filters.bookingId)
             query.bookingId = new mongoose_2.Types.ObjectId(filters.bookingId);
+        if (filters.insightId)
+            query.insightId = new mongoose_2.Types.ObjectId(filters.insightId);
         if (filters.reviewedUserId)
             query.reviewedUserId = new mongoose_2.Types.ObjectId(filters.reviewedUserId);
         if (filters.minRating || filters.maxRating) {
@@ -242,6 +273,9 @@ let ReviewsService = ReviewsService_1 = class ReviewsService {
         const stayReviews = reviews.filter((r) => r.reviewType === review_schema_1.ReviewType.STAY);
         const subRatingAverages = this.calculateSubRatingAverages(stayReviews);
         return { ...base, subRatingAverages };
+    }
+    async getInsightReviews(insightId, options = {}) {
+        return this.findAll({ reviewType: review_schema_1.ReviewType.INSIGHT, insightId }, options);
     }
     async getAgentReviews(agentId, options = {}) {
         return this.findAll({ reviewType: review_schema_1.ReviewType.AGENT, agentId }, options);

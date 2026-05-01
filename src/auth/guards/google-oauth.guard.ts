@@ -4,6 +4,15 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 
 @Injectable()
 export class GoogleOAuthGuard extends AuthGuard('google') {
+  getAuthenticateOptions(context: ExecutionContext) {
+    const request = context.switchToHttp().getRequest<FastifyRequest>();
+    // Read the redirectUri from the query params if provided
+    const redirectUri = (request.query as any)?.redirectUri;
+    return {
+      state: redirectUri,
+    };
+  }
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<FastifyRequest>();
     const response = context.switchToHttp().getResponse<FastifyReply>();

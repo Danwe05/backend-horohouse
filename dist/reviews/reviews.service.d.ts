@@ -9,6 +9,7 @@ export interface ReviewFilters {
     propertyId?: string;
     agentId?: string;
     bookingId?: string;
+    insightId?: string;
     reviewedUserId?: string;
     minRating?: number;
     maxRating?: number;
@@ -28,6 +29,7 @@ export declare class ReviewsService {
     private readonly logger;
     constructor(reviewModel: Model<ReviewDocument>, propertyModel: Model<PropertyDocument>, userModel: Model<UserDocument>, bookingModel: Model<BookingDocument>);
     create(createReviewDto: CreateReviewDto, user: User): Promise<Review>;
+    private createInsightReview;
     private createStandardReview;
     private createBookingReview;
     findAll(filters?: ReviewFilters, options?: ReviewOptions): Promise<{
@@ -53,6 +55,7 @@ export declare class ReviewsService {
             value: number;
         };
     }>;
+    getInsightReviews(insightId: string, options?: ReviewOptions): Promise<any>;
     getAgentReviews(agentId: string, options?: ReviewOptions): Promise<any>;
     getAgentReviewStats(agentId: string): Promise<{
         averageRating: number;

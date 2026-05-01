@@ -119,6 +119,23 @@ export class ReviewsController {
     return this.reviewsService.getPropertyReviewStats(propertyId);
   }
 
+  @Get('insight/:insightId')
+  @Public()
+  @ApiOperation({ summary: 'Get comments/reviews for an insight (article)' })
+  @ApiParam({ name: 'insightId' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'sortBy', required: false, type: String })
+  @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
+  async getInsightReviews(@Param('insightId') insightId: string, @Query() query: any) {
+    return this.reviewsService.getInsightReviews(insightId, {
+      page: query.page ? parseInt(query.page) : 1,
+      limit: query.limit ? parseInt(query.limit) : 20,
+      sortBy: query.sortBy || 'createdAt',
+      sortOrder: query.sortOrder || 'desc',
+    });
+  }
+
   @Get('agent/:agentId')
   @Public()
   @ApiOperation({ summary: 'Get reviews for an agent' })

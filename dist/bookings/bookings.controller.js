@@ -67,6 +67,9 @@ let BookingsController = class BookingsController {
     async getBookingById(id, req) {
         return this.bookingsService.getBookingById(id, req.user);
     }
+    async getHostStats(req) {
+        return this.bookingsService.getHostStats(req.user._id.toString());
+    }
 };
 exports.BookingsController = BookingsController;
 __decorate([
@@ -267,6 +270,17 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], BookingsController.prototype, "getBookingById", null);
+__decorate([
+    (0, common_1.Get)('host-stats'),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Get aggregated dashboard stats for the authenticated host' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Host dashboard stats' }),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], BookingsController.prototype, "getHostStats", null);
 exports.BookingsController = BookingsController = __decorate([
     (0, swagger_1.ApiTags)('Bookings'),
     (0, common_1.Controller)('bookings'),

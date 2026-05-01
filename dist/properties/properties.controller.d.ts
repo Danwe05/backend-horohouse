@@ -4,6 +4,7 @@ import { CreatePropertyDto, UpdatePropertyDto, BlockDatesDto, UnblockDatesDto } 
 import { User } from '../users/schemas/user.schema';
 export declare class PropertiesController {
     private readonly propertiesService;
+    private readonly logger;
     constructor(propertiesService: PropertiesService);
     create(createPropertyDto: CreatePropertyDto, req: FastifyRequest & {
         user: User;
@@ -22,7 +23,7 @@ export declare class PropertiesController {
     searchByText(query: any, req: FastifyRequest & {
         user?: User;
     }): Promise<{
-        properties: (import("mongoose").Document<unknown, {}, import("./schemas/property.schema").PropertyDocument, {}, {}> & import("./schemas/property.schema").Property & import("mongoose").Document<import("mongoose").Types.ObjectId, any, any, Record<string, any>, {}> & Required<{
+        properties: (import("mongoose").FlattenMaps<import("./schemas/property.schema").PropertyDocument> & Required<{
             _id: import("mongoose").Types.ObjectId;
         }> & {
             __v: number;

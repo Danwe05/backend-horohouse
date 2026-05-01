@@ -17,11 +17,12 @@ if (!globalThis.crypto) {
 const ALLOWED_ORIGINS = [
     'https://horohouse.com',
     'https://www.horohouse.com',
-    'https://horohouse.com',
-    'https://www.horohouse.com',
     'http://localhost:3000',
     'http://localhost:8081',
     'http://localhost:8082',
+    'http://192.168.255.37:8081',
+    'http://192.168.255.37:8082',
+    'http://192.168.255.37:4000',
     'http://10.48.115.37:8081',
     'http://10.48.115.37:8082',
 ];
@@ -47,9 +48,9 @@ const MULTIPART_OPTIONS = {
     limits: {
         fieldNameSize: 100,
         fieldSize: 1024 * 1024 * 10,
-        fields: 10,
-        fileSize: 1024 * 1024 * 50,
-        files: 15,
+        fields: 20,
+        fileSize: 1024 * 1024 * 100,
+        files: 50,
         headerPairs: 2000,
     },
 };
@@ -82,12 +83,13 @@ async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule, new platform_fastify_1.FastifyAdapter({ logger: false }));
     const configService = app.get(config_1.ConfigService);
     const port = configService.get('PORT', 3000);
+    const isProduction = configService.get('NODE_ENV') === 'production';
     await app.register(helmet_1.default, HELMET_OPTIONS);
     await app.register(cors_1.default, CORS_OPTIONS);
     await app.register(multipart_1.default, MULTIPART_OPTIONS);
     app.useGlobalPipes(new common_1.ValidationPipe({
         whitelist: true,
-        forbidNonWhitelisted: false,
+        forbidNonWhitelisted: true,
         transform: true,
         transformOptions: { enableImplicitConversion: true },
         exceptionFactory: (errors) => {
@@ -95,12 +97,14 @@ async function bootstrap() {
             return new common_1.BadRequestException(errors);
         },
     }));
-    setupSwagger(app);
+    if (!isProduction) {
+        setupSwagger(app);
+        logger.log('📚 Swagger enabled');
+    }
     app.setGlobalPrefix('api/v1');
     setupMongoEvents(logger);
     await app.listen(port, '0.0.0.0');
     logger.log(`🚀 HoroHouse Backend running on port ${port}`);
-    logger.log(`📚 API Docs: https://backend-horohouse-production.up.railway.app/api/docs`);
     logger.log(`🔌 WebSocket ready`);
     logger.log(`🌍 Allowed origins: ${ALLOWED_ORIGINS.join(', ')}`);
     logger.log(`🔑 JWT Secret configured: ${!!configService.get('JWT_SECRET')}`);

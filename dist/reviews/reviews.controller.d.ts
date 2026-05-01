@@ -27,6 +27,7 @@ export declare class ReviewsController {
             value: number;
         };
     }>;
+    getInsightReviews(insightId: string, query: any): Promise<any>;
     getAgentReviews(agentId: string, query: any): Promise<any>;
     getAgentReviewStats(agentId: string): Promise<{
         averageRating: number;

@@ -263,4 +263,13 @@ export class BookingsController {
   ) {
     return this.bookingsService.getBookingById(id, req.user);
   }
+
+  @Get('host-stats')
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get aggregated dashboard stats for the authenticated host' })
+  @ApiResponse({ status: 200, description: 'Host dashboard stats' })
+  async getHostStats(@Req() req: FastifyRequest & { user: User }) {
+    return this.bookingsService.getHostStats(req.user._id.toString());
+  }
 }

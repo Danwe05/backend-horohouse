@@ -21,6 +21,7 @@ import {
   UpdatePaymentDto,
   BookingQueryDto,
 } from './dto/booking.dto';
+import { HostStatsDto } from './dto/host-stats.dto';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -231,14 +232,7 @@ export class BookingsService {
       });
     }
 
-    return saved;
-
-    this.logger.log(
-      `Booking created: ${saved._id} | property: ${dto.propertyId} | ` +
-      `guest: ${guest._id} | status: ${initialStatus}`,
-    );
-
-    return saved;
+    return saved; 
   }
 
   /**
@@ -440,6 +434,81 @@ export class BookingsService {
   async getPropertyBookings(propertyId: string, query: BookingQueryDto): Promise<PaginatedBookings> {
     return this.paginateBookings({ propertyId: new Types.ObjectId(propertyId) }, query);
   }
+
+
+async getHostStats(hostId: string): Promise<HostStatsDto> {
+  const hostObjectId = new Types.ObjectId(hostId);
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const [bookingStats, propertyStats] = await Promise.all([
+
+    this.bookingModel.aggregate([
+      { $match: { hostId: hostObjectId } },
+      { $facet: {
+
+        completedStays: [
+          { $match: { status: { $in: ['completed', 'checked_out'] } } },
+          { $count: 'total' },
+        ],
+
+        currentMonthEarnings: [
+          {
+            $match: {
+              status: { $in: ['confirmed', 'completed', 'checked_out'] },
+              checkIn: { $gte: monthStart },
+            },
+          },
+          { $group: { _id: null, total: { $sum: '$priceBreakdown.totalAmount' } } },
+        ],
+
+        occupiedPropertyIds: [
+          {
+            $match: {
+              status: { $in: ['confirmed', 'checked_in'] },
+              checkIn: { $lte: now },
+              checkOut: { $gte: now },
+            },
+          },
+          { $group: { _id: '$propertyId' } },
+        ],
+      }},
+    ]),
+
+    this.propertyModel.aggregate([
+      { $match: { ownerId: hostObjectId, isActive: true } },
+      {
+        $group: {
+          _id: null,
+          totalListings: { $sum: 1 },
+          avgRating: {
+            $avg: {
+              $cond: [{ $gt: ['$averageRating', 0] }, '$averageRating', null],
+            },
+          },
+        },
+      },
+    ]),
+  ]);
+
+  const bStats = bookingStats[0];
+  const completedStays       = bStats.completedStays[0]?.total ?? 0;
+  const currentMonthEarnings = bStats.currentMonthEarnings[0]?.total ?? 0;
+  const occupiedCount        = bStats.occupiedPropertyIds.length;
+  const totalListings        = propertyStats[0]?.totalListings ?? 0;
+  const avgRating            = propertyStats[0]?.avgRating ?? 0;
+  const occupancyRate        = totalListings > 0 ? (occupiedCount / totalListings) * 100 : 0;
+  const isSuperhost          = completedStays >= 10 && avgRating >= 4.8;
+
+  return {
+    totalListings,
+    completedStays,
+    currentMonthEarnings,
+    avgRating:      Math.round(avgRating * 10) / 10,
+    occupancyRate:  Math.round(occupancyRate * 10) / 10,
+    isSuperhost,
+  };
+}
 
   // ════════════════════════════════════════════════════════════════════════════
   // AVAILABILITY

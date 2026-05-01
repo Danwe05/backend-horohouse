@@ -19,6 +19,7 @@ const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 const axios_1 = require("axios");
 const cloudinary_1 = require("../utils/cloudinary");
+const watermark_service_1 = require("../watermark/watermark.service");
 const property_schema_1 = require("./schemas/property.schema");
 const user_schema_1 = require("../users/schemas/user.schema");
 const history_service_1 = require("../history/history.service");
@@ -30,12 +31,60 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
     userModel;
     historyService;
     userInteractionsService;
+    watermarkService;
     logger = new common_1.Logger(PropertiesService_1.name);
-    constructor(propertyModel, userModel, historyService, userInteractionsService) {
+    cache = new Map();
+    CACHE_TTL_MS = 60_000;
+    POPULAR_CITIES_TTL_MS = 5 * 60_000;
+    FEATURED_TTL_MS = 2 * 60_000;
+    constructor(propertyModel, userModel, historyService, userInteractionsService, watermarkService) {
         this.propertyModel = propertyModel;
         this.userModel = userModel;
         this.historyService = historyService;
         this.userInteractionsService = userInteractionsService;
+        this.watermarkService = watermarkService;
+    }
+    async onModuleInit() {
+        await this.ensureIndexes();
+    }
+    async ensureIndexes() {
+        try {
+            const col = this.propertyModel.collection;
+            await Promise.all([
+                col.createIndex({ location: '2dsphere' }),
+                col.createIndex({ title: 'text', description: 'text', city: 'text', neighborhood: 'text', keywords: 'text' }),
+                col.createIndex({ isActive: 1, approvalStatus: 1, availability: 1, createdAt: -1 }, { background: true }),
+                col.createIndex({ ownerId: 1, createdAt: -1 }, { background: true }),
+                col.createIndex({ city: 1, isActive: 1, price: 1 }, { background: true }),
+                col.createIndex({ listingType: 1, isActive: 1, approvalStatus: 1, availability: 1, createdAt: -1 }, { background: true }),
+                col.createIndex({ viewsCount: -1, isActive: 1 }, { background: true }),
+                col.createIndex({ isFeatured: 1, isActive: 1, createdAt: -1 }, { background: true }),
+                col.createIndex({ slug: 1 }, { unique: true, sparse: true, background: true }),
+            ]);
+            this.logger.log('✅ Property indexes ensured');
+        }
+        catch (err) {
+            this.logger.error('Failed to ensure property indexes:', err);
+        }
+    }
+    cacheGet(key) {
+        const entry = this.cache.get(key);
+        if (!entry)
+            return null;
+        if (Date.now() > entry.expiresAt) {
+            this.cache.delete(key);
+            return null;
+        }
+        return entry.data;
+    }
+    cacheSet(key, data, ttlMs = this.CACHE_TTL_MS) {
+        this.cache.set(key, { data, expiresAt: Date.now() + ttlMs });
+    }
+    cacheInvalidate(pattern) {
+        for (const key of this.cache.keys()) {
+            if (key.startsWith(pattern))
+                this.cache.delete(key);
+        }
     }
     async create(createPropertyDto, user) {
         try {
@@ -45,12 +94,14 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
                     throw new common_1.BadRequestException('Invalid coordinates provided');
                 }
             }
-            const locationData = (latitude !== undefined && longitude !== undefined) ? {
-                location: {
-                    type: 'Point',
-                    coordinates: [Number(longitude), Number(latitude)],
+            const locationData = latitude !== undefined && longitude !== undefined
+                ? {
+                    location: {
+                        type: 'Point',
+                        coordinates: [Number(longitude), Number(latitude)],
+                    },
                 }
-            } : {};
+                : {};
             const isAdmin = user.role === user_schema_1.UserRole.ADMIN;
             if (createPropertyDto.listingType === property_schema_1.ListingType.SHORT_TERM) {
                 this.validateShortTermFields(createPropertyDto);
@@ -71,6 +122,7 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
                 maxNights: createPropertyDto.maxNights ?? 365,
                 cleaningFee: createPropertyDto.cleaningFee ?? 0,
                 serviceFee: createPropertyDto.serviceFee ?? 0,
+                city: createPropertyDto.city.trim().toLowerCase(),
                 shortTermAmenities: createPropertyDto.shortTermAmenities ?? {},
                 isInstantBookable: createPropertyDto.isInstantBookable ?? false,
                 cancellationPolicy: createPropertyDto.cancellationPolicy ?? property_schema_1.CancellationPolicy.FLEXIBLE,
@@ -79,6 +131,9 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
                 unavailableDates: [],
             });
             const savedProperty = await property.save();
+            this.cacheInvalidate('popular_cities');
+            this.cacheInvalidate('recent_');
+            this.cacheInvalidate('featured_');
             this.logger.log(`Property created: ${savedProperty._id} by user ${user._id} (approvalStatus: ${savedProperty.approvalStatus})`);
             return savedProperty;
         }
@@ -91,128 +146,32 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
         try {
             const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc', includeInactive = false, } = options;
             const skip = (page - 1) * limit;
-            const query = {};
-            if (!includeInactive) {
-                query.isActive = true;
-                query.approvalStatus = property_schema_1.ApprovalStatus.APPROVED;
-                query.availability = property_schema_1.PropertyStatus.ACTIVE;
+            const query = this.buildBaseListQuery(filters, includeInactive);
+            const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
+            const availabilityPromise = filters.checkIn && filters.checkOut
+                ? this.getBookedPropertyIds(filters.checkIn, filters.checkOut)
+                : Promise.resolve([]);
+            const bookedIds = await availabilityPromise;
+            if (bookedIds.length > 0) {
+                query._id = { $nin: bookedIds };
             }
-            if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
-                query.price = {};
-                if (filters.minPrice !== undefined)
-                    query.price.$gte = filters.minPrice;
-                if (filters.maxPrice !== undefined)
-                    query.price.$lte = filters.maxPrice;
-            }
-            if (filters.propertyType) {
-                query.type = filters.propertyType;
-            }
-            if (filters.listingType) {
-                query.listingType = filters.listingType;
-            }
-            if (filters.city) {
-                query.city = { $regex: filters.city, $options: 'i' };
-            }
-            if (filters.bedrooms) {
-                query['amenities.bedrooms'] = { $gte: filters.bedrooms };
-            }
-            if (filters.bathrooms) {
-                query['amenities.bathrooms'] = { $gte: filters.bathrooms };
-            }
-            if (filters.amenities && filters.amenities.length > 0) {
-                const amenityQueries = filters.amenities.map(amenity => ({
-                    [`amenities.${amenity}`]: true,
-                }));
-                query.$and = amenityQueries;
-            }
-            if (filters.latitude && filters.longitude) {
-                if (filters.radius) {
-                    query.location = {
-                        $near: {
-                            $geometry: {
-                                type: 'Point',
-                                coordinates: [filters.longitude, filters.latitude],
-                            },
-                            $maxDistance: filters.radius * 1000,
-                        },
-                    };
-                }
-            }
-            if (filters.bounds) {
-                const { northeast, southwest } = filters.bounds;
-                query.location = {
-                    $geoWithin: {
-                        $box: [
-                            [southwest.lng, southwest.lat],
-                            [northeast.lng, northeast.lat],
-                        ],
-                    },
-                };
-            }
-            if (filters.isInstantBookable !== undefined) {
-                query.isInstantBookable = filters.isInstantBookable;
-            }
-            if (filters.pricingUnit) {
-                query.pricingUnit = filters.pricingUnit;
-            }
-            if (filters.cancellationPolicy) {
-                query.cancellationPolicy = filters.cancellationPolicy;
-            }
-            if (filters.minGuests) {
-                query['shortTermAmenities.maxGuests'] = { $gte: filters.minGuests };
-            }
-            if (filters.checkIn && filters.checkOut) {
-                const bookedPropertyIds = await this.getBookedPropertyIds(filters.checkIn, filters.checkOut);
-                query._id = { $nin: bookedPropertyIds };
-            }
-            const sort = {};
-            sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
             const [properties, total] = await Promise.all([
                 this.propertyModel
                     .find(query)
+                    .select(this.listingProjection())
                     .populate('ownerId', 'name email phoneNumber profilePicture')
                     .populate('agentId', 'name email phoneNumber profilePicture agency')
                     .sort(sort)
                     .skip(skip)
                     .limit(limit)
+                    .lean()
                     .exec(),
                 this.propertyModel.countDocuments(query),
             ]);
             if (user) {
-                await this.historyService.logActivity({
-                    userId: user._id,
-                    activityType: history_schema_1.ActivityType.SEARCH,
-                    searchQuery: JSON.stringify(filters),
-                    searchFilters: filters,
-                    resultsCount: total,
-                    userLocation: filters.latitude && filters.longitude ? {
-                        type: 'Point',
-                        coordinates: [filters.longitude, filters.latitude],
-                    } : undefined,
-                    city: filters.city,
-                });
-                await this.userInteractionsService.trackInteraction({
-                    userId: user._id,
-                    interactionType: user_interaction_schema_1.InteractionType.SEARCH,
-                    source: user_interaction_schema_1.InteractionSource.SEARCH_RESULTS,
-                    city: filters.city,
-                    metadata: {
-                        searchQuery: JSON.stringify(filters),
-                        searchFilters: filters,
-                        resultsCount: total,
-                    },
-                    location: filters.latitude && filters.longitude ? {
-                        type: 'Point',
-                        coordinates: [filters.longitude, filters.latitude],
-                    } : undefined,
-                });
+                this.fireAnalytics(user, filters, total);
             }
-            return {
-                properties,
-                total,
-                page,
-                totalPages: Math.ceil(total / limit),
-            };
+            return { properties: properties, total, page, totalPages: Math.ceil(total / limit) };
         }
         catch (error) {
             this.logger.error('Error finding properties:', error);
@@ -228,45 +187,38 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
                 .find({
                 location: {
                     $near: {
-                        $geometry: {
-                            type: 'Point',
-                            coordinates: [longitude, latitude],
-                        },
+                        $geometry: { type: 'Point', coordinates: [longitude, latitude] },
                         $maxDistance: radiusKm * 1000,
                     },
                 },
                 isActive: true,
                 availability: property_schema_1.PropertyStatus.ACTIVE,
             })
+                .select(this.listingProjection())
                 .populate('ownerId', 'name email phoneNumber')
                 .populate('agentId', 'name email phoneNumber agency')
                 .limit(limit)
+                .lean()
                 .exec();
             if (user) {
-                await this.historyService.logActivity({
+                this.historyService
+                    .logActivity({
                     userId: user._id,
                     activityType: history_schema_1.ActivityType.SEARCH,
                     searchQuery: `nearby:${latitude},${longitude},${radiusKm}km`,
                     resultsCount: properties.length,
-                    userLocation: {
-                        type: 'Point',
-                        coordinates: [longitude, latitude],
-                    },
-                });
-                await this.userInteractionsService.trackInteraction({
+                    userLocation: { type: 'Point', coordinates: [longitude, latitude] },
+                })
+                    .catch((e) => this.logger.error('History log failed', e));
+                this.userInteractionsService
+                    .trackInteraction({
                     userId: user._id,
                     interactionType: user_interaction_schema_1.InteractionType.MAP_VIEW,
                     source: user_interaction_schema_1.InteractionSource.MAP,
-                    location: {
-                        type: 'Point',
-                        coordinates: [longitude, latitude],
-                    },
-                    metadata: {
-                        searchQuery: `nearby:${latitude},${longitude},${radiusKm}km`,
-                        resultsCount: properties.length,
-                        radius: radiusKm,
-                    },
-                });
+                    location: { type: 'Point', coordinates: [longitude, latitude] },
+                    metadata: { resultsCount: properties.length, radius: radiusKm },
+                })
+                    .catch((e) => this.logger.error('Interaction track failed', e));
             }
             return properties;
         }
@@ -278,28 +230,34 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
     async findOne(id, user) {
         try {
             if (!mongoose_2.Types.ObjectId.isValid(id)) {
-                this.logger.error(`Invalid property ID received: ${id}`);
-                throw new common_1.BadRequestException(`Invalid property ID format: ${id}. Expected 24-character hexadecimal string.`);
+                throw new common_1.BadRequestException(`Invalid property ID format: ${id}`);
             }
-            const property = await this.propertyModel
-                .findById(id)
-                .populate('ownerId', 'name email phoneNumber profilePicture')
-                .populate('agentId', 'name email phoneNumber profilePicture agency licenseNumber')
-                .exec();
+            const [property] = await Promise.all([
+                this.propertyModel
+                    .findById(id)
+                    .populate('ownerId', 'name email phoneNumber profilePicture')
+                    .populate('agentId', 'name email phoneNumber profilePicture agency licenseNumber')
+                    .lean()
+                    .exec(),
+                this.propertyModel.findByIdAndUpdate(id, { $inc: { viewsCount: 1 } }).exec(),
+            ]);
             if (!property) {
                 throw new common_1.NotFoundException('Property not found');
             }
-            await this.propertyModel.findByIdAndUpdate(id, { $inc: { viewsCount: 1 } });
             if (user) {
-                await this.historyService.logActivity({
+                this.historyService
+                    .logActivity({
                     userId: user._id,
                     activityType: history_schema_1.ActivityType.PROPERTY_VIEW,
                     propertyId: property._id,
-                    agentId: property.agentId ? property.agentId._id : property.ownerId,
+                    agentId: property.agentId?._id ?? property.ownerId,
                     city: property.city,
-                });
-                await this.updateRecentlyViewed(user._id, property._id);
-                await this.userInteractionsService.trackInteraction({
+                })
+                    .catch((e) => this.logger.error('History log failed', e));
+                this.updateRecentlyViewed(user._id, property._id)
+                    .catch((e) => this.logger.error('Recently viewed update failed', e));
+                this.userInteractionsService
+                    .trackInteraction({
                     userId: user._id,
                     interactionType: user_interaction_schema_1.InteractionType.PROPERTY_VIEW,
                     propertyId: property._id,
@@ -311,13 +269,11 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
                     bedrooms: property.amenities?.bedrooms,
                     bathrooms: property.amenities?.bathrooms,
                     location: property.location
-                        ? {
-                            type: 'Point',
-                            coordinates: property.location.coordinates,
-                        }
+                        ? { type: 'Point', coordinates: property.location.coordinates }
                         : undefined,
                     neighborhood: property.neighborhood,
-                });
+                })
+                    .catch((e) => this.logger.error('Interaction track failed', e));
             }
             return property;
         }
@@ -328,20 +284,24 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
     }
     async update(id, updatePropertyDto, user) {
         try {
-            const property = await this.propertyModel.findById(id);
-            if (!property) {
+            const property = await this.propertyModel
+                .findById(id)
+                .select('ownerId agentId title description city type')
+                .lean()
+                .exec();
+            if (!property)
                 throw new common_1.NotFoundException('Property not found');
-            }
             if (user.role !== user_schema_1.UserRole.ADMIN &&
                 property.ownerId.toString() !== user._id.toString() &&
                 property.agentId?.toString() !== user._id.toString()) {
                 throw new common_1.ForbiddenException('You can only update your own properties');
             }
-            if (updatePropertyDto.latitude !== undefined && updatePropertyDto.longitude !== undefined) {
+            if (updatePropertyDto.latitude !== undefined &&
+                updatePropertyDto.longitude !== undefined) {
                 if (!this.isValidCoordinate(updatePropertyDto.latitude, updatePropertyDto.longitude)) {
                     throw new common_1.BadRequestException('Invalid coordinates provided');
                 }
-                updatePropertyDto['location'] = {
+                updatePropertyDto.location = {
                     type: 'Point',
                     coordinates: [updatePropertyDto.longitude, updatePropertyDto.latitude],
                 };
@@ -358,10 +318,12 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
                 .findByIdAndUpdate(id, updatePropertyDto, { new: true })
                 .populate('ownerId', 'name email phoneNumber')
                 .populate('agentId', 'name email phoneNumber agency')
+                .lean()
                 .exec();
-            if (!updatedProperty) {
+            if (!updatedProperty)
                 throw new common_1.NotFoundException('Property not found after update');
-            }
+            this.cacheInvalidate(`similar_${id}`);
+            this.cacheInvalidate('featured_');
             this.logger.log(`Property updated: ${id} by user ${user._id}`);
             return updatedProperty;
         }
@@ -381,7 +343,7 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
         if (filters.listingType)
             query.listingType = filters.listingType;
         if (filters.city)
-            query.city = { $regex: filters.city, $options: 'i' };
+            query.city = filters.city.trim().toLowerCase();
         if (filters.ownerId)
             query.ownerId = new mongoose_2.Types.ObjectId(filters.ownerId);
         if (filters.search) {
@@ -391,8 +353,7 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
                 { address: { $regex: filters.search, $options: 'i' } },
             ];
         }
-        const sort = {};
-        sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+        const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
         const [properties, total] = await Promise.all([
             this.propertyModel
                 .find(query)
@@ -401,31 +362,31 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
+                .lean()
                 .exec(),
             this.propertyModel.countDocuments(query),
         ]);
-        return { properties, total, page, totalPages: Math.ceil(total / limit) };
+        return { properties: properties, total, page, totalPages: Math.ceil(total / limit) };
     }
     async approveProperty(id, admin) {
-        const property = await this.propertyModel.findById(id);
+        const property = await this.propertyModel.findById(id).select('_id').lean().exec();
         if (!property)
             throw new common_1.NotFoundException('Property not found');
         if (admin.role !== user_schema_1.UserRole.ADMIN)
             throw new common_1.ForbiddenException('Only admins can approve properties');
         const updated = await this.propertyModel
-            .findByIdAndUpdate(id, {
-            approvalStatus: property_schema_1.ApprovalStatus.APPROVED,
-            isActive: true,
-            $unset: { rejectionReason: '' },
-        }, { new: true })
+            .findByIdAndUpdate(id, { approvalStatus: property_schema_1.ApprovalStatus.APPROVED, isActive: true, $unset: { rejectionReason: '' } }, { new: true })
             .populate('ownerId', 'name email phoneNumber')
             .populate('agentId', 'name email agency')
+            .lean()
             .exec();
+        this.cacheInvalidate('featured_');
+        this.cacheInvalidate('recent_');
         this.logger.log(`Property ${id} approved by admin ${admin._id}`);
         return updated;
     }
     async rejectProperty(id, reason, admin) {
-        const property = await this.propertyModel.findById(id);
+        const property = await this.propertyModel.findById(id).select('_id').lean().exec();
         if (!property)
             throw new common_1.NotFoundException('Property not found');
         if (admin.role !== user_schema_1.UserRole.ADMIN)
@@ -438,21 +399,27 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
         }, { new: true })
             .populate('ownerId', 'name email phoneNumber')
             .populate('agentId', 'name email agency')
+            .lean()
             .exec();
         this.logger.log(`Property ${id} rejected by admin ${admin._id}. Reason: ${reason ?? 'none'}`);
         return updated;
     }
     async remove(id, user) {
         try {
-            const property = await this.propertyModel.findById(id);
-            if (!property) {
+            const property = await this.propertyModel
+                .findById(id)
+                .select('ownerId')
+                .lean()
+                .exec();
+            if (!property)
                 throw new common_1.NotFoundException('Property not found');
-            }
             if (user.role !== user_schema_1.UserRole.ADMIN &&
                 property.ownerId.toString() !== user._id.toString()) {
                 throw new common_1.ForbiddenException('You can only delete your own properties');
             }
             await this.propertyModel.findByIdAndDelete(id);
+            this.cacheInvalidate(`similar_${id}`);
+            this.cacheInvalidate('popular_cities');
             this.logger.log(`Property deleted: ${id} by user ${user._id}`);
         }
         catch (error) {
@@ -462,23 +429,17 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
     }
     async uploadImages(propertyId, files, user) {
         const property = await this.propertyModel.findById(propertyId);
-        if (!property) {
+        if (!property)
             throw new common_1.NotFoundException('Property not found');
-        }
-        if (user.role !== user_schema_1.UserRole.ADMIN &&
-            property.ownerId.toString() !== user._id.toString() &&
-            property.agentId?.toString() !== user._id.toString()) {
-            throw new common_1.ForbiddenException('You can only modify your own properties');
-        }
+        this.assertCanManage(property, user);
         const uploads = await Promise.all(files.map(async (file, index) => {
+            const watermarkedBuffer = await this.watermarkService.applyWatermark(file.buffer);
             const publicId = `property_${propertyId}_${Date.now()}_${index}`;
-            const result = await (0, cloudinary_1.uploadBufferToCloudinary)(file.buffer, {
+            const result = await (0, cloudinary_1.uploadBufferToCloudinary)(watermarkedBuffer, {
                 publicId,
                 folder: 'horohouse/properties/images',
                 resourceType: 'image',
-                transformation: [
-                    { quality: 'auto', fetch_format: 'auto' },
-                ],
+                transformation: [{ quality: 'auto', fetch_format: 'auto' }],
             });
             return { url: result.secure_url, publicId: result.public_id };
         }));
@@ -488,14 +449,9 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
     }
     async deleteImage(propertyId, imagePublicId, user) {
         const property = await this.propertyModel.findById(propertyId);
-        if (!property) {
+        if (!property)
             throw new common_1.NotFoundException('Property not found');
-        }
-        if (user.role !== user_schema_1.UserRole.ADMIN &&
-            property.ownerId.toString() !== user._id.toString() &&
-            property.agentId?.toString() !== user._id.toString()) {
-            throw new common_1.ForbiddenException('You can only modify your own properties');
-        }
+        this.assertCanManage(property, user);
         await (0, cloudinary_1.deleteFromCloudinary)(imagePublicId, 'image');
         property.images = (property.images || []).filter((img) => img.publicId !== imagePublicId);
         await property.save();
@@ -503,219 +459,222 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
     }
     async uploadVideos(propertyId, files, user) {
         const property = await this.propertyModel.findById(propertyId);
-        if (!property) {
+        if (!property)
             throw new common_1.NotFoundException('Property not found');
-        }
-        if (user.role !== user_schema_1.UserRole.ADMIN &&
-            property.ownerId.toString() !== user._id.toString() &&
-            property.agentId?.toString() !== user._id.toString()) {
-            throw new common_1.ForbiddenException('You can only modify your own properties');
-        }
+        this.assertCanManage(property, user);
         const uploads = await Promise.all(files.map(async (file, index) => {
             const publicId = `property_${propertyId}_video_${Date.now()}_${index}`;
             const result = await (0, cloudinary_1.uploadBufferToCloudinary)(file.buffer, {
                 publicId,
                 folder: 'horohouse/properties/videos',
                 resourceType: 'video',
-                transformation: [
-                    { quality: 'auto' },
-                ],
+                transformation: [{ quality: 'auto' }],
             });
             return { url: result.secure_url, publicId: result.public_id };
         }));
-        property.videos = [...(property.videos || []), ...uploads];
+        property.videos = [...((property.videos) || []), ...uploads];
         await property.save();
         return property;
     }
     async deleteVideo(propertyId, videoPublicId, user) {
         const property = await this.propertyModel.findById(propertyId);
-        if (!property) {
+        if (!property)
             throw new common_1.NotFoundException('Property not found');
-        }
-        if (user.role !== user_schema_1.UserRole.ADMIN &&
-            property.ownerId.toString() !== user._id.toString() &&
-            property.agentId?.toString() !== user._id.toString()) {
-            throw new common_1.ForbiddenException('You can only modify your own properties');
-        }
+        this.assertCanManage(property, user);
         await (0, cloudinary_1.deleteFromCloudinary)(videoPublicId, 'video');
         property.videos = (property.videos || []).filter((vid) => vid.publicId !== videoPublicId);
         await property.save();
         return property;
     }
     async getMostViewed(limit = 10) {
-        return this.propertyModel
+        const key = `most_viewed_${limit}`;
+        const cached = this.cacheGet(key);
+        if (cached)
+            return cached;
+        const result = await this.propertyModel
             .find({ isActive: true, availability: property_schema_1.PropertyStatus.ACTIVE })
+            .select(this.listingProjection())
             .sort({ viewsCount: -1 })
             .limit(limit)
             .populate('ownerId', 'name profilePicture')
             .populate('agentId', 'name profilePicture agency')
+            .lean()
             .exec();
+        this.cacheSet(key, result, this.CACHE_TTL_MS);
+        return result;
     }
     async getRecent(limit = 10) {
-        return this.propertyModel
+        const key = `recent_${limit}`;
+        const cached = this.cacheGet(key);
+        if (cached)
+            return cached;
+        const result = await this.propertyModel
             .find({ isActive: true, availability: property_schema_1.PropertyStatus.ACTIVE })
+            .select(this.listingProjection())
             .sort({ createdAt: -1 })
             .limit(limit)
             .populate('ownerId', 'name profilePicture')
             .populate('agentId', 'name profilePicture agency')
+            .lean()
             .exec();
+        this.cacheSet(key, result, this.CACHE_TTL_MS);
+        return result;
+    }
+    async getFeatured(limit = 10) {
+        const key = `featured_${limit}`;
+        const cached = this.cacheGet(key);
+        if (cached)
+            return cached;
+        const result = await this.propertyModel
+            .find({ isActive: true, isFeatured: true, availability: property_schema_1.PropertyStatus.ACTIVE })
+            .select(this.listingProjection())
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .populate('ownerId', 'name profilePicture')
+            .populate('agentId', 'name profilePicture agency')
+            .lean()
+            .exec();
+        this.cacheSet(key, result, this.FEATURED_TTL_MS);
+        return result;
+    }
+    async getPopularCities(limit = 10) {
+        const key = `popular_cities_${limit}`;
+        const cached = this.cacheGet(key);
+        if (cached)
+            return cached;
+        const result = await this.propertyModel.aggregate([
+            { $match: { isActive: true, availability: property_schema_1.PropertyStatus.ACTIVE } },
+            { $group: { _id: '$city', count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+            { $limit: limit },
+            { $project: { _id: 0, city: '$_id', count: 1 } },
+        ]);
+        this.cacheSet(key, result, this.POPULAR_CITIES_TTL_MS);
+        return result;
     }
     async getSimilarProperties(propertyId, limit = 6) {
+        const cacheKey = `similar_${propertyId}_${limit}`;
+        const cached = this.cacheGet(cacheKey);
+        if (cached)
+            return cached;
         try {
             if (!mongoose_2.Types.ObjectId.isValid(propertyId)) {
-                this.logger.error(`Invalid property ID format: ${propertyId}`);
                 throw new common_1.BadRequestException('Invalid property ID format');
             }
-            const property = await this.propertyModel.findById(propertyId);
-            if (!property) {
-                this.logger.error(`Property not found: ${propertyId}`);
+            const property = await this.propertyModel
+                .findById(propertyId)
+                .select('type city price listingType location')
+                .lean()
+                .exec();
+            if (!property)
                 throw new common_1.NotFoundException('Property not found');
-            }
-            this.logger.log(`Finding similar properties for: ${propertyId}`);
-            this.logger.log(`Reference property - type: ${property.type}, city: ${property.city}, price: ${property.price}, listingType: ${property.listingType}`);
             const priceMin = property.price * 0.7;
             const priceMax = property.price * 1.3;
-            const buildBaseQuery = (includePrice = true, includeType = true) => {
-                const query = {
-                    _id: { $ne: property._id },
-                    isActive: true,
-                    availability: property_schema_1.PropertyStatus.ACTIVE,
-                };
-                if (property.city) {
-                    query.city = { $regex: new RegExp(`^${property.city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') };
-                }
-                if (property.listingType) {
-                    query.listingType = property.listingType;
-                }
-                if (includeType && property.type) {
-                    query.type = property.type;
-                }
-                if (includePrice) {
-                    query.price = { $gte: priceMin, $lte: priceMax };
-                }
-                return query;
-            };
-            const propertyIds = new Set();
-            const properties = [];
-            const addUniqueProperties = (newProperties) => {
-                for (const prop of newProperties) {
-                    const id = prop._id.toString();
-                    if (!propertyIds.has(id)) {
-                        propertyIds.add(id);
-                        properties.push(prop);
-                    }
-                }
-            };
-            if (property.location?.coordinates &&
-                Array.isArray(property.location.coordinates) &&
-                property.location.coordinates.length === 2 &&
-                property.location.coordinates[0] !== 0 &&
-                property.location.coordinates[1] !== 0) {
-                try {
-                    this.logger.log(`Strategy 1: Location-based search (10km radius)`);
-                    const locationQuery = {
-                        ...buildBaseQuery(true, true),
+            const baseExclude = { _id: { $ne: property._id }, isActive: true, availability: property_schema_1.PropertyStatus.ACTIVE };
+            const cityFilter = property.city
+                ? { city: { $regex: new RegExp(`^${property.city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }
+                : {};
+            const listingFilter = property.listingType ? { listingType: property.listingType } : {};
+            const typeFilter = property.type ? { type: property.type } : {};
+            const priceFilter = { price: { $gte: priceMin, $lte: priceMax } };
+            const populate = [
+                { path: 'ownerId', select: 'name profilePicture' },
+                { path: 'agentId', select: 'name profilePicture agency' },
+            ];
+            const loc = property.location?.coordinates;
+            const hasValidLocation = Array.isArray(loc) &&
+                loc.length === 2 &&
+                loc[0] !== 0 &&
+                loc[1] !== 0;
+            const [geoResults, strictResults, relaxedResults, fallbackResults] = await Promise.all([
+                hasValidLocation
+                    ? this.propertyModel
+                        .find({
+                        ...baseExclude,
+                        ...cityFilter,
+                        ...listingFilter,
+                        ...typeFilter,
+                        ...priceFilter,
                         location: {
                             $near: {
-                                $geometry: {
-                                    type: 'Point',
-                                    coordinates: property.location.coordinates,
-                                },
-                                $maxDistance: 10000,
+                                $geometry: { type: 'Point', coordinates: loc },
+                                $maxDistance: 10_000,
                             },
                         },
-                    };
-                    const nearbyProperties = await this.propertyModel
-                        .find(locationQuery)
-                        .populate('ownerId', 'name profilePicture')
-                        .populate('agentId', 'name profilePicture agency')
+                    })
+                        .select(this.listingProjection())
+                        .populate(populate)
                         .limit(limit)
                         .lean()
-                        .exec();
-                    addUniqueProperties(nearbyProperties);
-                    this.logger.log(`Found ${nearbyProperties.length} properties using location-based search`);
+                        .exec()
+                        .catch(() => [])
+                    : Promise.resolve([]),
+                this.propertyModel
+                    .find({ ...baseExclude, ...cityFilter, ...listingFilter, ...typeFilter, ...priceFilter })
+                    .select(this.listingProjection())
+                    .populate(populate)
+                    .sort({ createdAt: -1 })
+                    .limit(limit)
+                    .lean()
+                    .exec(),
+                this.propertyModel
+                    .find({ ...baseExclude, ...cityFilter, ...listingFilter, ...typeFilter })
+                    .select(this.listingProjection())
+                    .populate(populate)
+                    .sort({ createdAt: -1 })
+                    .limit(limit)
+                    .lean()
+                    .exec(),
+                this.propertyModel
+                    .find({ ...baseExclude, ...cityFilter, ...listingFilter })
+                    .select(this.listingProjection())
+                    .populate(populate)
+                    .sort({ createdAt: -1 })
+                    .limit(limit)
+                    .lean()
+                    .exec(),
+            ]);
+            const seen = new Set();
+            const merged = [];
+            for (const batch of [geoResults, strictResults, relaxedResults, fallbackResults]) {
+                for (const p of batch) {
+                    const idStr = p._id.toString();
+                    if (!seen.has(idStr)) {
+                        seen.add(idStr);
+                        merged.push(p);
+                    }
+                    if (merged.length >= limit)
+                        break;
                 }
-                catch (locationError) {
-                    this.logger.warn(`Location search failed (geospatial index may be missing): ${locationError.message}`);
-                }
+                if (merged.length >= limit)
+                    break;
             }
-            if (properties.length < limit) {
-                this.logger.log(`Strategy 2: Same city, type, listing type, and price range (count: ${properties.length})`);
-                const remainingLimit = limit - properties.length;
-                const standardProperties = await this.propertyModel
-                    .find(buildBaseQuery(true, true))
-                    .populate('ownerId', 'name profilePicture')
-                    .populate('agentId', 'name profilePicture agency')
-                    .sort({ createdAt: -1 })
-                    .limit(remainingLimit)
-                    .lean()
-                    .exec();
-                addUniqueProperties(standardProperties);
-                this.logger.log(`Found ${standardProperties.length} additional properties`);
-            }
-            if (properties.length < limit) {
-                this.logger.log(`Strategy 3: Same city, type, listing - relaxed price (count: ${properties.length})`);
-                const remainingLimit = limit - properties.length;
-                const relaxedPriceProperties = await this.propertyModel
-                    .find(buildBaseQuery(false, true))
-                    .populate('ownerId', 'name profilePicture')
-                    .populate('agentId', 'name profilePicture agency')
-                    .sort({ createdAt: -1 })
-                    .limit(remainingLimit)
-                    .lean()
-                    .exec();
-                addUniqueProperties(relaxedPriceProperties);
-                this.logger.log(`Found ${relaxedPriceProperties.length} properties with relaxed price`);
-            }
-            if (properties.length < limit) {
-                this.logger.log(`Strategy 4: Same city and listing type only (count: ${properties.length})`);
-                const remainingLimit = limit - properties.length;
-                const fallbackProperties = await this.propertyModel
-                    .find(buildBaseQuery(false, false))
-                    .populate('ownerId', 'name profilePicture')
-                    .populate('agentId', 'name profilePicture agency')
-                    .sort({ createdAt: -1 })
-                    .limit(remainingLimit)
-                    .lean()
-                    .exec();
-                addUniqueProperties(fallbackProperties);
-                this.logger.log(`Found ${fallbackProperties.length} fallback properties`);
-            }
-            this.logger.log(`Final result: ${properties.length} similar properties for property ${propertyId}`);
-            return properties.slice(0, limit);
+            const result = merged.slice(0, limit);
+            this.cacheSet(cacheKey, result, this.CACHE_TTL_MS);
+            return result;
         }
         catch (error) {
-            this.logger.error(`Error finding similar properties for ${propertyId}:`, error);
-            if (error instanceof common_1.NotFoundException || error instanceof common_1.BadRequestException) {
+            if (error instanceof common_1.NotFoundException || error instanceof common_1.BadRequestException)
                 throw error;
-            }
-            this.logger.error('Unexpected error, returning empty array');
+            this.logger.error(`Error finding similar properties for ${propertyId}:`, error);
             return [];
         }
     }
     async getUserFavorites(userId, options = {}) {
         try {
-            const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc', } = options;
+            const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc' } = options;
             const skip = (page - 1) * limit;
-            const userDoc = await this.userModel
-                .findById(userId)
-                .select('favorites')
-                .lean()
-                .exec();
-            if (!userDoc) {
+            const userDoc = await this.userModel.findById(userId).select('favorites').lean().exec();
+            if (!userDoc)
                 throw new common_1.NotFoundException('User not found');
-            }
             const favoriteIds = userDoc.favorites || [];
             const total = favoriteIds.length;
-            if (total === 0) {
+            if (total === 0)
                 return { properties: [], total: 0, page, totalPages: 0 };
-            }
             const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
             const properties = await this.propertyModel
-                .find({
-                _id: { $in: favoriteIds },
-                isActive: true,
-            })
+                .find({ _id: { $in: favoriteIds }, isActive: true })
+                .select(this.listingProjection())
                 .populate('ownerId', 'name email phoneNumber profilePicture')
                 .populate('agentId', 'name email phoneNumber profilePicture agency')
                 .sort(sort)
@@ -723,7 +682,6 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
                 .limit(limit)
                 .lean()
                 .exec();
-            this.logger.log(`Retrieved ${properties.length} favorite properties for user ${userId} (total: ${total})`);
             return {
                 properties,
                 total,
@@ -736,14 +694,12 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
             throw error;
         }
     }
-    async getMyProperties(filters = {}, options = {}, userId, user) {
+    async getMyProperties(filters = {}, options = {}, userId) {
         try {
-            const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc', includeInactive = true, } = options;
+            const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc', includeInactive = true } = options;
             const skip = (page - 1) * limit;
             const userObjectId = new mongoose_2.Types.ObjectId(userId);
-            const query = {
-                ownerId: userObjectId,
-            };
+            const query = { ownerId: userObjectId };
             if (!includeInactive) {
                 query.isActive = true;
                 query.availability = property_schema_1.PropertyStatus.ACTIVE;
@@ -755,44 +711,35 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
                 if (filters.maxPrice !== undefined)
                     query.price.$lte = filters.maxPrice;
             }
-            if (filters.propertyType) {
+            if (filters.propertyType)
                 query.type = filters.propertyType;
-            }
-            if (filters.listingType) {
+            if (filters.listingType)
                 query.listingType = filters.listingType;
-            }
-            if (filters.city) {
-                query.city = { $regex: filters.city, $options: 'i' };
-            }
-            if (filters.bedrooms) {
+            if (filters.city)
+                query.city = filters.city.trim().toLowerCase();
+            if (filters.bedrooms)
                 query['amenities.bedrooms'] = { $gte: filters.bedrooms };
-            }
-            if (filters.bathrooms) {
+            if (filters.bathrooms)
                 query['amenities.bathrooms'] = { $gte: filters.bathrooms };
+            if (filters.amenities?.length) {
+                query.$and = filters.amenities.map((a) => ({ [`amenities.${a}`]: true }));
             }
-            if (filters.amenities && filters.amenities.length > 0) {
-                const amenityQueries = filters.amenities.map(amenity => ({
-                    [`amenities.${amenity}`]: true,
-                }));
-                query.$and = amenityQueries;
-            }
-            const sort = {};
-            sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
-            this.logger.log(`Querying properties with: ${JSON.stringify(query)}`);
+            const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
             const [properties, total] = await Promise.all([
                 this.propertyModel
                     .find(query)
+                    .select(this.listingProjection())
                     .populate('ownerId', 'name email phoneNumber profilePicture')
                     .populate('agentId', 'name email phoneNumber profilePicture agency')
                     .sort(sort)
                     .skip(skip)
                     .limit(limit)
+                    .lean()
                     .exec(),
                 this.propertyModel.countDocuments(query),
             ]);
-            this.logger.log(`Retrieved ${properties.length} properties for user ${userId}, total: ${total}`);
             return {
-                properties,
+                properties: properties,
                 total,
                 page,
                 totalPages: Math.ceil(total / limit),
@@ -803,47 +750,21 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
             throw error;
         }
     }
-    async getFeatured(limit = 10) {
-        return this.propertyModel
-            .find({ isActive: true, isFeatured: true, availability: property_schema_1.PropertyStatus.ACTIVE })
-            .sort({ createdAt: -1 })
-            .limit(limit)
-            .populate('ownerId', 'name profilePicture')
-            .populate('agentId', 'name profilePicture agency')
-            .exec();
-    }
-    async getPopularCities(limit = 10) {
-        return this.propertyModel.aggregate([
-            { $match: { isActive: true, availability: property_schema_1.PropertyStatus.ACTIVE } },
-            { $group: { _id: '$city', count: { $sum: 1 } } },
-            { $sort: { count: -1 } },
-            { $limit: limit },
-            { $project: { _id: 0, city: '$_id', count: 1 } },
-        ]);
-    }
     async geocodeAddress(address, city, country) {
         try {
-            const query = [address, city, country]
-                .filter(value => value && value.trim())
-                .join(', ');
+            const query = [address, city, country].filter(Boolean).join(', ');
             const response = await axios_1.default.get('https://nominatim.openstreetmap.org/search', {
-                params: {
-                    q: query,
-                    format: 'json',
-                    limit: 1,
-                },
-                headers: {
-                    'User-Agent': 'HoroHouse-Backend/1.0',
-                },
+                params: { q: query, format: 'json', limit: 1 },
+                headers: { 'User-Agent': 'HoroHouse-Backend/1.0' },
+                timeout: 5000,
             });
-            if (response.data && response.data.length > 0) {
-                const result = response.data[0];
+            if (response.data?.length > 0) {
                 return {
-                    latitude: parseFloat(result.lat),
-                    longitude: parseFloat(result.lon),
+                    latitude: parseFloat(response.data[0].lat),
+                    longitude: parseFloat(response.data[0].lon),
                 };
             }
-            this.logger.warn(`Geocoding failed for address: ${query}`);
+            this.logger.warn(`Geocoding returned no results for: ${query}`);
             return null;
         }
         catch (error) {
@@ -861,119 +782,37 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
             };
             const { page = 1, limit = 20, sortBy = 'score' } = options;
             const skip = (page - 1) * limit;
-            let sort = {};
-            if (sortBy === 'score') {
-                sort = { score: { $meta: 'textScore' } };
-            }
-            else {
-                sort[sortBy] = options.sortOrder === 'asc' ? 1 : -1;
-            }
+            const sort = sortBy === 'score'
+                ? { score: { $meta: 'textScore' } }
+                : { [sortBy]: options.sortOrder === 'asc' ? 1 : -1 };
             const [properties, total] = await Promise.all([
                 this.propertyModel
                     .find(query, { score: { $meta: 'textScore' } })
+                    .select(this.listingProjection())
                     .populate('ownerId', 'name profilePicture')
                     .populate('agentId', 'name profilePicture agency')
                     .sort(sort)
                     .skip(skip)
-                    .limit(limit),
+                    .limit(limit)
+                    .lean(),
                 this.propertyModel.countDocuments(query),
             ]);
             if (user) {
-                await this.historyService.logActivity({
+                this.historyService
+                    .logActivity({
                     userId: user._id,
                     activityType: history_schema_1.ActivityType.SEARCH,
                     searchQuery: searchText,
                     searchFilters: filters,
                     resultsCount: total,
-                });
+                })
+                    .catch((e) => this.logger.error('History log failed', e));
             }
-            return {
-                properties,
-                total,
-                page,
-                totalPages: Math.ceil(total / limit),
-            };
+            return { properties, total, page, totalPages: Math.ceil(total / limit) };
         }
         catch (error) {
             this.logger.error('Text search failed:', error);
             throw error;
-        }
-    }
-    isValidCoordinate(latitude, longitude) {
-        return (latitude >= -90 &&
-            latitude <= 90 &&
-            longitude >= -180 &&
-            longitude <= 180);
-    }
-    generateSlug(title) {
-        return title
-            .toLowerCase()
-            .replace(/[^a-z0-9\s-]/g, '')
-            .replace(/\s+/g, '-')
-            .replace(/-+/g, '-')
-            .trim();
-    }
-    generateKeywords(property) {
-        const keywords = [];
-        if (property.title) {
-            keywords.push(...property.title.toLowerCase().split(' '));
-        }
-        if (property.description) {
-            keywords.push(...property.description.toLowerCase().split(' '));
-        }
-        if (property.city) {
-            keywords.push(property.city.toLowerCase());
-        }
-        if (property.type) {
-            keywords.push(property.type.toString().toLowerCase());
-        }
-        return [...new Set(keywords)].filter(keyword => keyword.length > 2);
-    }
-    async trackTourView(propertyId) {
-        if (!mongoose_2.Types.ObjectId.isValid(propertyId))
-            return;
-        await this.propertyModel
-            .findByIdAndUpdate(propertyId, { $inc: { tourViews: 1 } })
-            .exec();
-    }
-    buildFilterQuery(filters) {
-        const query = {};
-        if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
-            query.price = {};
-            if (filters.minPrice !== undefined)
-                query.price.$gte = filters.minPrice;
-            if (filters.maxPrice !== undefined)
-                query.price.$lte = filters.maxPrice;
-        }
-        if (filters.propertyType)
-            query.type = filters.propertyType;
-        if (filters.listingType)
-            query.listingType = filters.listingType;
-        if (filters.city)
-            query.city = { $regex: filters.city, $options: 'i' };
-        if (filters.bedrooms)
-            query['amenities.bedrooms'] = { $gte: filters.bedrooms };
-        if (filters.bathrooms)
-            query['amenities.bathrooms'] = { $gte: filters.bathrooms };
-        return query;
-    }
-    async updateRecentlyViewed(userId, propertyId) {
-        try {
-            this.logger.log(`Updating recently viewed for user ${userId}, property ${propertyId}`);
-            await this.userModel.updateOne({ _id: userId }, { $pull: { recentlyViewed: { propertyId: propertyId } } });
-            const result = await this.userModel.updateOne({ _id: userId }, {
-                $push: {
-                    recentlyViewed: {
-                        $each: [{ propertyId: propertyId, viewedAt: new Date() }],
-                        $position: 0,
-                        $slice: 50,
-                    },
-                },
-            });
-            this.logger.log(`Recently viewed updated: ${result.modifiedCount} document(s) modified`);
-        }
-        catch (error) {
-            this.logger.error('Failed to update recently viewed:', error);
         }
     }
     async getShortTermListings(filters = {}, options = {}) {
@@ -986,19 +825,17 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
             availability: property_schema_1.PropertyStatus.ACTIVE,
         };
         if (filters.city)
-            query.city = { $regex: filters.city, $options: 'i' };
+            query.city = filters.city.trim().toLowerCase();
         if (filters.propertyType)
             query.type = filters.propertyType;
         if (filters.pricingUnit)
             query.pricingUnit = filters.pricingUnit;
         if (filters.cancellationPolicy)
             query.cancellationPolicy = filters.cancellationPolicy;
-        if (filters.isInstantBookable !== undefined) {
+        if (filters.isInstantBookable !== undefined)
             query.isInstantBookable = filters.isInstantBookable;
-        }
-        if (filters.minGuests) {
+        if (filters.minGuests)
             query['shortTermAmenities.maxGuests'] = { $gte: filters.minGuests };
-        }
         if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
             query.price = {};
             if (filters.minPrice !== undefined)
@@ -1014,25 +851,27 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
                 },
             };
         }
-        if (filters.checkIn && filters.checkOut) {
-            const bookedIds = await this.getBookedPropertyIds(filters.checkIn, filters.checkOut);
-            if (bookedIds.length > 0) {
-                query._id = { $nin: bookedIds };
-            }
-        }
+        const availabilityPromise = filters.checkIn && filters.checkOut
+            ? this.getBookedPropertyIds(filters.checkIn, filters.checkOut)
+            : Promise.resolve([]);
+        const bookedIds = await availabilityPromise;
+        if (bookedIds.length > 0)
+            query._id = { $nin: bookedIds };
         const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
         const [properties, total] = await Promise.all([
             this.propertyModel
                 .find(query)
+                .select(this.listingProjection())
                 .populate('ownerId', 'name email phoneNumber profilePicture')
                 .populate('agentId', 'name email phoneNumber profilePicture agency')
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
+                .lean()
                 .exec(),
             this.propertyModel.countDocuments(query),
         ]);
-        return { properties, total, page, totalPages: Math.ceil(total / limit) };
+        return { properties: properties, total, page, totalPages: Math.ceil(total / limit) };
     }
     async blockDates(propertyId, dto, user) {
         const property = await this.propertyModel.findById(propertyId);
@@ -1053,43 +892,36 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
             }
             return { from, to, reason: r.reason };
         });
-        const existingRanges = property.unavailableDates ?? [];
-        const existingFromSet = new Set(existingRanges.map((r) => r.from.toISOString()));
+        const existingFromSet = new Set((property.unavailableDates ?? []).map((r) => r.from.toISOString()));
         const toAdd = newRanges.filter((r) => !existingFromSet.has(r.from.toISOString()));
         const updated = await this.propertyModel
             .findByIdAndUpdate(propertyId, { $push: { unavailableDates: { $each: toAdd } } }, { new: true })
+            .lean()
             .exec();
-        this.logger.log(`Blocked ${toAdd.length} date range(s) on property ${propertyId} by user ${user._id}`);
+        this.logger.log(`Blocked ${toAdd.length} date range(s) on property ${propertyId}`);
         return updated;
     }
     async unblockDates(propertyId, dto, user) {
-        const property = await this.propertyModel.findById(propertyId);
+        const property = await this.propertyModel.findById(propertyId).select('ownerId agentId listingType').lean().exec();
         if (!property)
             throw new common_1.NotFoundException('Property not found');
         this.assertCanManage(property, user);
         const fromDatesToRemove = dto.fromDates.map((d) => {
             const parsed = new Date(d);
-            if (isNaN(parsed.getTime())) {
+            if (isNaN(parsed.getTime()))
                 throw new common_1.BadRequestException(`Invalid date: ${d}`);
-            }
             return parsed;
         });
         const updated = await this.propertyModel
-            .findByIdAndUpdate(propertyId, {
-            $pull: {
-                unavailableDates: {
-                    from: { $in: fromDatesToRemove },
-                },
-            },
-        }, { new: true })
+            .findByIdAndUpdate(propertyId, { $pull: { unavailableDates: { from: { $in: fromDatesToRemove } } } }, { new: true })
+            .lean()
             .exec();
         this.logger.log(`Unblocked ${fromDatesToRemove.length} date range(s) on property ${propertyId}`);
         return updated;
     }
     async getBlockedDates(propertyId) {
-        if (!mongoose_2.Types.ObjectId.isValid(propertyId)) {
+        if (!mongoose_2.Types.ObjectId.isValid(propertyId))
             throw new common_1.BadRequestException('Invalid property ID');
-        }
         const property = await this.propertyModel
             .findById(propertyId)
             .select('unavailableDates listingType')
@@ -1100,9 +932,8 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
         return { unavailableDates: property.unavailableDates ?? [] };
     }
     async getShortTermById(propertyId) {
-        if (!mongoose_2.Types.ObjectId.isValid(propertyId)) {
+        if (!mongoose_2.Types.ObjectId.isValid(propertyId))
             throw new common_1.BadRequestException('Invalid property ID');
-        }
         const property = await this.propertyModel
             .findOne({
             _id: new mongoose_2.Types.ObjectId(propertyId),
@@ -1114,9 +945,8 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
             .populate('agentId', 'name email phoneNumber profilePicture agency')
             .lean()
             .exec();
-        if (!property) {
+        if (!property)
             throw new common_1.NotFoundException('Short-term property not found');
-        }
         return {
             ...property,
             shortTermSummary: {
@@ -1135,36 +965,232 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
             },
         };
     }
+    async trackTourView(propertyId) {
+        if (!mongoose_2.Types.ObjectId.isValid(propertyId))
+            return;
+        await this.propertyModel.findByIdAndUpdate(propertyId, { $inc: { tourViews: 1 } }).exec();
+    }
+    listingProjection() {
+        return {
+            title: 1,
+            slug: 1,
+            price: 1,
+            pricingUnit: 1,
+            type: 1,
+            listingType: 1,
+            city: 1,
+            address: 1,
+            neighborhood: 1,
+            images: 1,
+            amenities: 1,
+            shortTermAmenities: 1,
+            isInstantBookable: 1,
+            cancellationPolicy: 1,
+            isFeatured: 1,
+            viewsCount: 1,
+            location: 1,
+            latitude: 1,
+            longitude: 1,
+            approvalStatus: 1,
+            isActive: 1,
+            availability: 1,
+            ownerId: 1,
+            agentId: 1,
+            createdAt: 1,
+        };
+    }
+    buildBaseListQuery(filters, includeInactive) {
+        const query = {};
+        if (!includeInactive) {
+            query.isActive = true;
+            query.approvalStatus = property_schema_1.ApprovalStatus.APPROVED;
+            query.availability = property_schema_1.PropertyStatus.ACTIVE;
+        }
+        if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
+            query.price = {};
+            if (filters.minPrice !== undefined)
+                query.price.$gte = filters.minPrice;
+            if (filters.maxPrice !== undefined)
+                query.price.$lte = filters.maxPrice;
+        }
+        if (filters.propertyType)
+            query.type = filters.propertyType;
+        if (filters.listingType)
+            query.listingType = filters.listingType;
+        if (filters.city)
+            query.city = filters.city.trim().toLowerCase();
+        if (filters.bedrooms)
+            query['amenities.bedrooms'] = { $gte: filters.bedrooms };
+        if (filters.bathrooms)
+            query['amenities.bathrooms'] = { $gte: filters.bathrooms };
+        if (filters.amenities?.length) {
+            query.$and = filters.amenities.map((a) => ({ [`amenities.${a}`]: true }));
+        }
+        if (filters.isInstantBookable !== undefined)
+            query.isInstantBookable = filters.isInstantBookable;
+        if (filters.pricingUnit)
+            query.pricingUnit = filters.pricingUnit;
+        if (filters.cancellationPolicy)
+            query.cancellationPolicy = filters.cancellationPolicy;
+        if (filters.minGuests)
+            query['shortTermAmenities.maxGuests'] = { $gte: filters.minGuests };
+        if (filters.latitude && filters.longitude) {
+            if (filters.radius) {
+                query.location = {
+                    $near: {
+                        $geometry: { type: 'Point', coordinates: [filters.longitude, filters.latitude] },
+                        $maxDistance: filters.radius * 1000,
+                    },
+                };
+            }
+        }
+        if (filters.bounds) {
+            const { northeast, southwest } = filters.bounds;
+            query.location = {
+                $geoWithin: {
+                    $box: [
+                        [southwest.lng, southwest.lat],
+                        [northeast.lng, northeast.lat],
+                    ],
+                },
+            };
+        }
+        return query;
+    }
+    buildFilterQuery(filters) {
+        const query = {};
+        if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
+            query.price = {};
+            if (filters.minPrice !== undefined)
+                query.price.$gte = filters.minPrice;
+            if (filters.maxPrice !== undefined)
+                query.price.$lte = filters.maxPrice;
+        }
+        if (filters.propertyType)
+            query.type = filters.propertyType;
+        if (filters.listingType)
+            query.listingType = filters.listingType;
+        if (filters.city)
+            query.city = filters.city.trim().toLowerCase();
+        if (filters.bedrooms)
+            query['amenities.bedrooms'] = { $gte: filters.bedrooms };
+        if (filters.bathrooms)
+            query['amenities.bathrooms'] = { $gte: filters.bathrooms };
+        return query;
+    }
+    fireAnalytics(user, filters, total) {
+        this.historyService
+            .logActivity({
+            userId: user._id,
+            activityType: history_schema_1.ActivityType.SEARCH,
+            searchQuery: JSON.stringify(filters),
+            searchFilters: filters,
+            resultsCount: total,
+            userLocation: filters.latitude && filters.longitude
+                ? { type: 'Point', coordinates: [filters.longitude, filters.latitude] }
+                : undefined,
+            city: filters.city,
+        })
+            .catch((e) => this.logger.error('History log failed', e));
+        this.userInteractionsService
+            .trackInteraction({
+            userId: user._id,
+            interactionType: user_interaction_schema_1.InteractionType.SEARCH,
+            source: user_interaction_schema_1.InteractionSource.SEARCH_RESULTS,
+            city: filters.city,
+            metadata: { searchFilters: filters, resultsCount: total },
+            location: filters.latitude && filters.longitude
+                ? { type: 'Point', coordinates: [filters.longitude, filters.latitude] }
+                : undefined,
+        })
+            .catch((e) => this.logger.error('Interaction track failed', e));
+    }
+    async updateRecentlyViewed(userId, propertyId) {
+        try {
+            await this.userModel.updateOne({ _id: userId }, [
+                {
+                    $set: {
+                        recentlyViewed: {
+                            $slice: [
+                                {
+                                    $concatArrays: [
+                                        [{ propertyId, viewedAt: '$$NOW' }],
+                                        {
+                                            $filter: {
+                                                input: { $ifNull: ['$recentlyViewed', []] },
+                                                cond: { $ne: ['$$this.propertyId', propertyId] },
+                                            },
+                                        },
+                                    ],
+                                },
+                                50,
+                            ],
+                        },
+                    },
+                },
+            ]);
+        }
+        catch (error) {
+            this.logger.error('Failed to update recently viewed:', error);
+        }
+    }
     async getBookedPropertyIds(checkIn, checkOut) {
-        const bookingModel = this.propertyModel.db.model('Booking');
-        if (!bookingModel) {
+        try {
+            const bookingModel = this.propertyModel.db.model('Booking');
+            if (!bookingModel)
+                return [];
+            const bookings = await bookingModel
+                .find({
+                status: { $in: ['confirmed', 'pending'] },
+                checkIn: { $lt: checkOut },
+                checkOut: { $gt: checkIn },
+            })
+                .select('propertyId')
+                .lean()
+                .exec();
+            return bookings.map((b) => b.propertyId);
+        }
+        catch {
             this.logger.warn('Booking model not available — skipping availability filter');
             return [];
         }
-        const bookings = await bookingModel
-            .find({
-            status: { $in: ['confirmed', 'pending'] },
-            checkIn: { $lt: checkOut },
-            checkOut: { $gt: checkIn },
-        })
-            .select('propertyId')
-            .lean()
-            .exec();
-        return bookings.map((b) => b.propertyId);
+    }
+    isValidCoordinate(lat, lng) {
+        return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+    }
+    generateSlug(title) {
+        const base = title
+            .toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .trim();
+        const suffix = Math.random().toString(36).slice(2, 7);
+        return `${base}-${suffix}`;
+    }
+    generateKeywords(property) {
+        const raw = [];
+        if (property.title)
+            raw.push(...property.title.toLowerCase().split(' '));
+        if (property.description)
+            raw.push(...property.description.toLowerCase().split(' '));
+        if (property.city)
+            raw.push(property.city.toLowerCase());
+        if (property.type)
+            raw.push(property.type.toString().toLowerCase());
+        return [...new Set(raw)].filter((k) => k.length > 2);
     }
     validateShortTermFields(dto) {
         if (!dto.pricingUnit) {
-            throw new common_1.BadRequestException('pricingUnit is required for short-term listings (nightly / weekly / monthly)');
+            throw new common_1.BadRequestException('pricingUnit is required for short-term listings');
         }
         if (dto.minNights && dto.maxNights && dto.minNights > dto.maxNights) {
             throw new common_1.BadRequestException('minNights cannot be greater than maxNights');
         }
-        if (dto.shortTermAmenities?.checkInTime &&
-            !/^\d{2}:\d{2}$/.test(dto.shortTermAmenities.checkInTime)) {
+        if (dto.shortTermAmenities?.checkInTime && !/^\d{2}:\d{2}$/.test(dto.shortTermAmenities.checkInTime)) {
             throw new common_1.BadRequestException('checkInTime must be in HH:mm format');
         }
-        if (dto.shortTermAmenities?.checkOutTime &&
-            !/^\d{2}:\d{2}$/.test(dto.shortTermAmenities.checkOutTime)) {
+        if (dto.shortTermAmenities?.checkOutTime && !/^\d{2}:\d{2}$/.test(dto.shortTermAmenities.checkOutTime)) {
             throw new common_1.BadRequestException('checkOutTime must be in HH:mm format');
         }
     }
@@ -1185,6 +1211,7 @@ exports.PropertiesService = PropertiesService = PropertiesService_1 = __decorate
     __metadata("design:paramtypes", [mongoose_2.Model,
         mongoose_2.Model,
         history_service_1.HistoryService,
-        user_interactions_service_1.UserInteractionsService])
+        user_interactions_service_1.UserInteractionsService,
+        watermark_service_1.WatermarkService])
 ], PropertiesService);
 //# sourceMappingURL=properties.service.js.map

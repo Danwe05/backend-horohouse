@@ -10,16 +10,21 @@ import mongoose from 'mongoose';
 import { AppModule } from './app.module';
 import { webcrypto } from 'crypto';
 
-if (!globalThis.crypto) { globalThis.crypto = webcrypto as Crypto; }
+if (!globalThis.crypto) {
+  globalThis.crypto = webcrypto as Crypto;
+}
 
 const ALLOWED_ORIGINS = [
-  'https://horohouse.com',
-  'https://www.horohouse.com',
   'https://horohouse.com',
   'https://www.horohouse.com',
   'http://localhost:3000',
   'http://localhost:8081',
   'http://localhost:8082',
+  // Current dev machine network
+  'http://192.168.255.37:8081',
+  'http://192.168.255.37:8082',
+  'http://192.168.255.37:4000',
+  // Previous network (kept for backward compat)
   'http://10.48.115.37:8081',
   'http://10.48.115.37:8082',
 ];
@@ -44,13 +49,14 @@ const HELMET_OPTIONS = {
   },
 };
 
+// Liberal limits — files are streamed to Cloudinary on upload; server only buffers them briefly
 const MULTIPART_OPTIONS = {
   limits: {
     fieldNameSize: 100,
-    fieldSize: 1024 * 1024 * 10,
-    fields: 10,
-    fileSize: 1024 * 1024 * 50,
-    files: 15,
+    fieldSize: 1024 * 1024 * 10,  // 10 MB per non-file field
+    fields: 20,
+    fileSize: 1024 * 1024 * 100,  // 100 MB per file — Cloudinary accepts up to 100 MB images & videos
+    files: 50,                     // allow up to 50 files per request
     headerPairs: 2000,
   },
 };
@@ -85,14 +91,14 @@ function setupMongoEvents(logger: Logger) {
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
-  // ✅ NO IoAdapter — Fastify handles WebSockets natively via gateways
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: false }), // ← remove maxParamLength (deprecated)
+    new FastifyAdapter({ logger: false }),
   );
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 3000);
+  const isProduction = configService.get('NODE_ENV') === 'production';
 
   // Plugins
   await app.register(helmet as any, HELMET_OPTIONS);
@@ -100,19 +106,24 @@ async function bootstrap() {
   await app.register(multipart as any, MULTIPART_OPTIONS);
 
   // Global pipes
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    forbidNonWhitelisted: false,
-    transform: true,
-    transformOptions: { enableImplicitConversion: true },
-    exceptionFactory: (errors) => {
-      logger.error('Validation errors:', JSON.stringify(errors, null, 2));
-      return new BadRequestException(errors);
-    },
-  }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true, // reject unknown fields instead of silently passing them
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+      exceptionFactory: (errors) => {
+        logger.error('Validation errors:', JSON.stringify(errors, null, 2));
+        return new BadRequestException(errors);
+      },
+    }),
+  );
 
-  // Swagger
-  setupSwagger(app);
+  // Swagger — dev/staging only
+  if (!isProduction) {
+    setupSwagger(app);
+    logger.log('📚 Swagger enabled');
+  }
 
   // Global prefix
   app.setGlobalPrefix('api/v1');
@@ -120,11 +131,9 @@ async function bootstrap() {
   // MongoDB events
   setupMongoEvents(logger);
 
-  // ✅ This will now correctly bind to 0.0.0.0
   await app.listen(port, '0.0.0.0');
 
   logger.log(`🚀 HoroHouse Backend running on port ${port}`);
-  logger.log(`📚 API Docs: https://backend-horohouse-production.up.railway.app/api/docs`);
   logger.log(`🔌 WebSocket ready`);
   logger.log(`🌍 Allowed origins: ${ALLOWED_ORIGINS.join(', ')}`);
   logger.log(`🔑 JWT Secret configured: ${!!configService.get('JWT_SECRET')}`);
@@ -133,4 +142,4 @@ async function bootstrap() {
 bootstrap().catch((error) => {
   console.error('❌ Failed to start server:', error);
   process.exit(1);
-});
+}); 

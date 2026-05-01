@@ -518,6 +518,18 @@ __decorate([
     (0, class_validator_1.IsEnum)(property_schema_1.PropertyStatus),
     __metadata("design:type", String)
 ], CreatePropertyDto.prototype, "status", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ type: [Object] }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    __metadata("design:type", Array)
+], CreatePropertyDto.prototype, "images", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ type: [Object] }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    __metadata("design:type", Array)
+], CreatePropertyDto.prototype, "videos", void 0);
 class UpdatePropertyDto extends (0, swagger_1.PartialType)(CreatePropertyDto) {
     availability;
     isVerified;

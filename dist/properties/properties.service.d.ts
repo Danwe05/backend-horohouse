@@ -1,4 +1,6 @@
+import { OnModuleInit } from '@nestjs/common';
 import { Model, Types } from 'mongoose';
+import { WatermarkService } from '../watermark/watermark.service';
 import { Property, PropertyDocument, PropertyType, ApprovalStatus, ListingType, PricingUnit, CancellationPolicy } from './schemas/property.schema';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { HistoryService } from '../history/history.service';
@@ -40,13 +42,23 @@ export interface PropertySearchOptions {
     sortOrder?: 'asc' | 'desc';
     includeInactive?: boolean;
 }
-export declare class PropertiesService {
+export declare class PropertiesService implements OnModuleInit {
     private propertyModel;
     private userModel;
     private historyService;
     private userInteractionsService;
+    private watermarkService;
     private readonly logger;
-    constructor(propertyModel: Model<PropertyDocument>, userModel: Model<UserDocument>, historyService: HistoryService, userInteractionsService: UserInteractionsService);
+    private readonly cache;
+    private readonly CACHE_TTL_MS;
+    private readonly POPULAR_CITIES_TTL_MS;
+    private readonly FEATURED_TTL_MS;
+    constructor(propertyModel: Model<PropertyDocument>, userModel: Model<UserDocument>, historyService: HistoryService, userInteractionsService: UserInteractionsService, watermarkService: WatermarkService);
+    onModuleInit(): Promise<void>;
+    private ensureIndexes;
+    private cacheGet;
+    private cacheSet;
+    private cacheInvalidate;
     create(createPropertyDto: CreatePropertyDto, user: User): Promise<Property>;
     findAll(filters?: PropertySearchFilters, options?: PropertySearchOptions, user?: User): Promise<{
         properties: Property[];
@@ -85,6 +97,11 @@ export declare class PropertiesService {
     deleteVideo(propertyId: string, videoPublicId: string, user: User): Promise<Property>;
     getMostViewed(limit?: number): Promise<Property[]>;
     getRecent(limit?: number): Promise<Property[]>;
+    getFeatured(limit?: number): Promise<Property[]>;
+    getPopularCities(limit?: number): Promise<Array<{
+        city: string;
+        count: number;
+    }>>;
     getSimilarProperties(propertyId: string, limit?: number): Promise<Property[]>;
     getUserFavorites(userId: string, options?: PropertySearchOptions): Promise<{
         properties: any[];
@@ -92,23 +109,18 @@ export declare class PropertiesService {
         page: number;
         totalPages: number;
     }>;
-    getMyProperties(filters: PropertySearchFilters | undefined, options: PropertySearchOptions | undefined, userId: string, user?: User): Promise<{
+    getMyProperties(filters: PropertySearchFilters | undefined, options: PropertySearchOptions | undefined, userId: string): Promise<{
         properties: Property[];
         total: number;
         page: number;
         totalPages: number;
     }>;
-    getFeatured(limit?: number): Promise<Property[]>;
-    getPopularCities(limit?: number): Promise<Array<{
-        city: string;
-        count: number;
-    }>>;
     geocodeAddress(address: string, city?: string, country?: string): Promise<{
         latitude: number;
         longitude: number;
     } | null>;
     searchByText(searchText: string, filters?: PropertySearchFilters, options?: PropertySearchOptions, user?: User): Promise<{
-        properties: (import("mongoose").Document<unknown, {}, PropertyDocument, {}, {}> & Property & import("mongoose").Document<Types.ObjectId, any, any, Record<string, any>, {}> & Required<{
+        properties: (import("mongoose").FlattenMaps<PropertyDocument> & Required<{
             _id: Types.ObjectId;
         }> & {
             __v: number;
@@ -117,12 +129,6 @@ export declare class PropertiesService {
         page: number;
         totalPages: number;
     }>;
-    private isValidCoordinate;
-    private generateSlug;
-    private generateKeywords;
-    trackTourView(propertyId: string): Promise<void>;
-    private buildFilterQuery;
-    private updateRecentlyViewed;
     getShortTermListings(filters?: {
         city?: string;
         minPrice?: number;
@@ -154,7 +160,16 @@ export declare class PropertiesService {
         unavailableDates: any[];
     }>;
     getShortTermById(propertyId: string): Promise<any>;
+    trackTourView(propertyId: string): Promise<void>;
+    private listingProjection;
+    private buildBaseListQuery;
+    private buildFilterQuery;
+    private fireAnalytics;
+    private updateRecentlyViewed;
     private getBookedPropertyIds;
+    private isValidCoordinate;
+    private generateSlug;
+    private generateKeywords;
     validateShortTermFields(dto: any): void;
     private assertCanManage;
 }

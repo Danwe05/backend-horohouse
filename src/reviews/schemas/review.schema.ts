@@ -7,6 +7,7 @@ export enum ReviewType {
   AGENT = 'agent',
   STAY = 'stay',
   GUEST = 'guest',
+  INSIGHT = 'insight',
 }
 
 export enum ReviewerRole {
@@ -37,6 +38,9 @@ export class Review {
 
   @Prop({ type: Types.ObjectId, ref: 'Booking' })
   bookingId?: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'Post' })
+  insightId?: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
   reviewedUserId?: Types.ObjectId;

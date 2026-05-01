@@ -35,6 +35,7 @@ export function uploadBufferToCloudinary(
     resourceType = 'auto',
     overwrite = true,
     transformation,
+    
   }: {
     publicId?: string;
     folder?: string;

@@ -59,6 +59,14 @@ let ReviewsController = class ReviewsController {
     async getPropertyReviewStats(propertyId) {
         return this.reviewsService.getPropertyReviewStats(propertyId);
     }
+    async getInsightReviews(insightId, query) {
+        return this.reviewsService.getInsightReviews(insightId, {
+            page: query.page ? parseInt(query.page) : 1,
+            limit: query.limit ? parseInt(query.limit) : 20,
+            sortBy: query.sortBy || 'createdAt',
+            sortOrder: query.sortOrder || 'desc',
+        });
+    }
     async getAgentReviews(agentId, query) {
         return this.reviewsService.getAgentReviews(agentId, {
             page: query.page ? parseInt(query.page) : 1,
@@ -173,6 +181,21 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "getPropertyReviewStats", null);
+__decorate([
+    (0, common_1.Get)('insight/:insightId'),
+    (0, roles_guard_1.Public)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Get comments/reviews for an insight (article)' }),
+    (0, swagger_1.ApiParam)({ name: 'insightId' }),
+    (0, swagger_1.ApiQuery)({ name: 'page', required: false, type: Number }),
+    (0, swagger_1.ApiQuery)({ name: 'limit', required: false, type: Number }),
+    (0, swagger_1.ApiQuery)({ name: 'sortBy', required: false, type: String }),
+    (0, swagger_1.ApiQuery)({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] }),
+    __param(0, (0, common_1.Param)('insightId')),
+    __param(1, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], ReviewsController.prototype, "getInsightReviews", null);
 __decorate([
     (0, common_1.Get)('agent/:agentId'),
     (0, roles_guard_1.Public)(),

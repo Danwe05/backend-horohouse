@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var PropertiesController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PropertiesController = void 0;
 const common_1 = require("@nestjs/common");
@@ -49,8 +50,9 @@ class UpdatePropertyRequestDto extends CreatePropertyRequestDto {
     isFeatured;
     isActive;
 }
-let PropertiesController = class PropertiesController {
+let PropertiesController = PropertiesController_1 = class PropertiesController {
     propertiesService;
+    logger = new common_1.Logger(PropertiesController_1.name);
     constructor(propertiesService) {
         this.propertiesService = propertiesService;
     }
@@ -232,9 +234,8 @@ let PropertiesController = class PropertiesController {
         if (!userId) {
             throw new common_1.BadRequestException('User ID not found in request');
         }
-        console.log('User ID:', userId, 'Type:', typeof userId);
-        console.log('Full user object:', JSON.stringify(req.user, null, 2));
-        return this.propertiesService.getMyProperties(filters, options, userId, req.user);
+        this.logger.debug(`Fetching properties for user ${userId}`);
+        return this.propertiesService.getMyProperties(filters, options, userId);
     }
     async toggleFeatured(id, body, req) {
         return this.propertiesService.update(id, { isFeatured: body.isFeatured }, req.user);
@@ -785,7 +786,7 @@ __decorate([
     __metadata("design:paramtypes", [String, String, Object]),
     __metadata("design:returntype", Promise)
 ], PropertiesController.prototype, "deleteVideo", null);
-exports.PropertiesController = PropertiesController = __decorate([
+exports.PropertiesController = PropertiesController = PropertiesController_1 = __decorate([
     (0, swagger_1.ApiTags)('Properties'),
     (0, common_1.Controller)('properties'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
